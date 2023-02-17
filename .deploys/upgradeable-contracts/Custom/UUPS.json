@@ -1,0 +1,203 @@
+{
+  "id": 137,
+  "network": "Custom",
+  "deployments": {
+    "0xB87493C96Af9623C737e8aA7f0D4F6f3B49C64Ba": {
+      "date": "2023-02-14T20:40:59.728Z",
+      "contractName": "SATIN",
+      "fork": "london",
+      "implementationAddress": "0xa8A22506968A3A8527530eF486C4290CF582bD6a",
+      "layout": {
+        "storage": [
+          {
+            "astId": 527,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8"
+          },
+          {
+            "astId": 530,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool"
+          },
+          {
+            "astId": 2056,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage"
+          },
+          {
+            "astId": 971,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_balances",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_mapping(t_address,t_uint256)"
+          },
+          {
+            "astId": 977,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_allowances",
+            "offset": 0,
+            "slot": "52",
+            "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))"
+          },
+          {
+            "astId": 979,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_totalSupply",
+            "offset": 0,
+            "slot": "53",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 981,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_name",
+            "offset": 0,
+            "slot": "54",
+            "type": "t_string_storage"
+          },
+          {
+            "astId": 983,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_symbol",
+            "offset": 0,
+            "slot": "55",
+            "type": "t_string_storage"
+          },
+          {
+            "astId": 1563,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "56",
+            "type": "t_array(t_uint256)45_storage"
+          },
+          {
+            "astId": 1705,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_array(t_uint256)50_storage"
+          },
+          {
+            "astId": 846,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_paused",
+            "offset": 0,
+            "slot": "151",
+            "type": "t_bool"
+          },
+          {
+            "astId": 951,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "152",
+            "type": "t_array(t_uint256)49_storage"
+          },
+          {
+            "astId": 10,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "_owner",
+            "offset": 0,
+            "slot": "201",
+            "type": "t_address"
+          },
+          {
+            "astId": 130,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "202",
+            "type": "t_array(t_uint256)49_storage"
+          },
+          {
+            "astId": 509,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "251",
+            "type": "t_array(t_uint256)50_storage"
+          },
+          {
+            "astId": 824,
+            "contract": "contracts/base/token/Satin.sol:SATIN",
+            "label": "__gap",
+            "offset": 0,
+            "slot": "301",
+            "type": "t_array(t_uint256)50_storage"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "encoding": "inplace",
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)45_storage": {
+            "base": "t_uint256",
+            "encoding": "inplace",
+            "label": "uint256[45]",
+            "numberOfBytes": "1440"
+          },
+          "t_array(t_uint256)49_storage": {
+            "base": "t_uint256",
+            "encoding": "inplace",
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "base": "t_uint256",
+            "encoding": "inplace",
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_bool": {
+            "encoding": "inplace",
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "encoding": "mapping",
+            "key": "t_address",
+            "label": "mapping(address => mapping(address => uint256))",
+            "numberOfBytes": "32",
+            "value": "t_mapping(t_address,t_uint256)"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "encoding": "mapping",
+            "key": "t_address",
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32",
+            "value": "t_uint256"
+          },
+          "t_string_storage": {
+            "encoding": "bytes",
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "encoding": "inplace",
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "encoding": "inplace",
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        }
+      }
+    }
+  }
+}

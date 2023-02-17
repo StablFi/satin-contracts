@@ -1,0 +1,20 @@
+# Satin Contracts
+
+SwapUtilsV1Contract deployed at: 0x0DDBCe2ebE7090Db10a5270507bf006cb237b42c
+AmplificationUtilsV1Contract deployed at: 0xB472c4B5Fd9fFE101280bFc3B0c68767A31430D5
+SwapContract deployed at: 0x78Ef19b288b07619eb205102E8b713250D516cF0
+LP Token deployed at address: 0x3A6134C3df5591f4ED207d404b95Cd31B38a7871
+Controller is deployed at: 0xC0A726367F6283a3bA10E5959Be2c100Bd628aBf
+BaseV1Factory is deployed at: 0xF54B2Dd2BAcaBF25342B581e2d09451FA6046E55
+BaseV1Router01 is deployed at: 0x6cE643b9093ec1bE96c4EaFf82844f8517C77BaD
+SatinLibrary is deployed at 0xa244cC6e5f23ed2eBBbBA60078FF983FCe5CDaec
+Satin token is deployed at: 0x7AF85F17DccC8280D3eEf3E401a09EA1090e8fea
+GaugeFactory is deployed at: 0xeFc2674CF43827d6aa1D544052D53c81240a5043
+BribeFactory is deployed at: 0xb1591B0EF7dEdb09B6c901F475fd97906BF690A1
+ve is deployed at address: 0x37Bf97D6C4a54EBabc5ea9A72145B6e2315a3fA4
+ve_dist is deployed at address: 0xcc6943337215ce657C33D4D987cC7a31dF27Ce26
+voter is deployed at address: 0x4fB7e5001Abe4107275f21c658F3AfcCC1Ad617a
+minter is deployed at address: 0xAC15799f09f52135D4015Ba86B561d3fd9ac2a89
+CashSatinLPAddress: 0xB05D39e9A4c6B597a084107c58d69d518ca65689
+
+Based on Solidly by Andre Cronje

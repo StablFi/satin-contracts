@@ -1,0 +1,20 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+.idea
+.vscode
+
+#Hardhat files
+cache
+artifacts
+
+# Yarn v3 files
+.yarn
+yarn.lock
+
+# OZ deploy files
+.openzeppelin
+.sync-gits-env
