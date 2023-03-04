@@ -22,13 +22,13 @@ contract Satin is IERC20, Initializable {
     // }
 
     function initialize() public initializer {
-        __ERC20_init("SATIN", "SATIN");
-        __ERC20Burnable_init();
-        __Pausable_init();
-        __Ownable_init();
-        __UUPSUpgradeable_init();
-
-        _mint(msg.sender, 3514796667 * 10 ** decimals());
+        // __ERC20_init("SATIN", "SATIN");
+        // __ERC20Burnable_init();
+        // __Pausable_init();
+        // __Ownable_init();
+        // __UUPSUpgradeable_init();
+        minter = msg.sender;
+        _mint(msg.sender, 3514796667 * 10 ** decimals);
     }
 
     // No checks as its meant to be once off to set minting rights to Minter
@@ -70,11 +70,7 @@ contract Satin is IERC20, Initializable {
         return _transfer(msg.sender, _to, _value);
     }
 
-    function transferFrom(
-        address _from,
-        address _to,
-        uint _value
-    ) external override returns (bool) {
+    function transferFrom(address _from, address _to, uint _value) external override returns (bool) {
         address spender = msg.sender;
         uint spenderAllowance = allowance[_from][spender];
         if (spenderAllowance != type(uint).max) {

@@ -47,11 +47,7 @@ contract BaseV1Router01 is Initializable {
     }
 
     // calculates the CREATE2 address for a pair without making any external calls
-    function pairFor(
-        address tokenA,
-        address tokenB,
-        bool stable
-    ) public view returns (address pair) {
+    function pairFor(address tokenA, address tokenB, bool stable) public view returns (address pair) {
         (address token0, address token1) = SatinLibrary.sortTokens(tokenA, tokenB);
         pair = address(
             uint160(
@@ -81,23 +77,14 @@ contract BaseV1Router01 is Initializable {
     // }
 
     // fetches and sorts the reserves for a pair
-    function getReserves(
-        address tokenA,
-        address tokenB,
-        bool stable
-    ) public view returns (uint256 reserveA, uint256 reserveB) {
+    function getReserves(address tokenA, address tokenB, bool stable) public view returns (uint256 reserveA, uint256 reserveB) {
         (address token0, ) = SatinLibrary.sortTokens(tokenA, tokenB);
-        (uint256 reserve0, uint256 reserve1, ) = IPair(pairFor(tokenA, tokenB, stable))
-            .getReserves();
+        (uint256 reserve0, uint256 reserve1, ) = IPair(pairFor(tokenA, tokenB, stable)).getReserves();
         (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
 
     // performs chained getAmountOut calculations on any number of pairs
-    function getAmountOut(
-        uint256 amountIn,
-        address tokenIn,
-        address tokenOut
-    ) external view returns (uint256 amount, bool stable) {
+    function getAmountOut(uint256 amountIn, address tokenIn, address tokenOut) external view returns (uint256 amount, bool stable) {
         address pair = pairFor(tokenIn, tokenOut, true);
         uint256 amountStable;
         uint256 amountVolatile;
@@ -112,10 +99,7 @@ contract BaseV1Router01 is Initializable {
     }
 
     // performs chained getAmountOut calculations on any number of pairs
-    function getAmountsOut(
-        uint256 amountIn,
-        route[] memory routes
-    ) public view returns (uint256[] memory amounts) {
+    function getAmountsOut(uint256 amountIn, route[] memory routes) public view returns (uint256[] memory amounts) {
         require(routes.length >= 1, "BaseV1Router: INVALID_PATH");
         amounts = new uint256[](routes.length + 1);
         amounts[0] = amountIn;
@@ -150,38 +134,19 @@ contract BaseV1Router01 is Initializable {
             (amountA, amountB) = (amountADesired, amountBDesired);
             liquidity = Math.sqrt(amountA * amountB) - MINIMUM_LIQUIDITY;
         } else {
-            uint256 amountBOptimal = SatinLibrary.quoteLiquidity(
-                amountADesired,
-                reserveA,
-                reserveB
-            );
+            uint256 amountBOptimal = SatinLibrary.quoteLiquidity(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
                 (amountA, amountB) = (amountADesired, amountBOptimal);
-                liquidity = Math.min(
-                    (amountA * _totalSupply) / reserveA,
-                    (amountB * _totalSupply) / reserveB
-                );
+                liquidity = Math.min((amountA * _totalSupply) / reserveA, (amountB * _totalSupply) / reserveB);
             } else {
-                uint256 amountAOptimal = SatinLibrary.quoteLiquidity(
-                    amountBDesired,
-                    reserveB,
-                    reserveA
-                );
+                uint256 amountAOptimal = SatinLibrary.quoteLiquidity(amountBDesired, reserveB, reserveA);
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
-                liquidity = Math.min(
-                    (amountA * _totalSupply) / reserveA,
-                    (amountB * _totalSupply) / reserveB
-                );
+                liquidity = Math.min((amountA * _totalSupply) / reserveA, (amountB * _totalSupply) / reserveB);
             }
         }
     }
 
-    function quoteRemoveLiquidity(
-        address tokenA,
-        address tokenB,
-        bool stable,
-        uint256 liquidity
-    ) external view returns (uint256 amountA, uint256 amountB) {
+    function quoteRemoveLiquidity(address tokenA, address tokenB, bool stable, uint256 liquidity) external view returns (uint256 amountA, uint256 amountB) {
         // create the pair if it doesn't exist yet
         address _pair = IFactory(factory).getPair(tokenA, tokenB, stable);
 
@@ -216,20 +181,12 @@ contract BaseV1Router01 is Initializable {
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
         } else {
-            uint256 amountBOptimal = SatinLibrary.quoteLiquidity(
-                amountADesired,
-                reserveA,
-                reserveB
-            );
+            uint256 amountBOptimal = SatinLibrary.quoteLiquidity(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
                 require(amountBOptimal >= amountBMin, "BaseV1Router: INSUFFICIENT_B_AMOUNT");
                 (amountA, amountB) = (amountADesired, amountBOptimal);
             } else {
-                uint256 amountAOptimal = SatinLibrary.quoteLiquidity(
-                    amountBDesired,
-                    reserveB,
-                    reserveA
-                );
+                uint256 amountAOptimal = SatinLibrary.quoteLiquidity(amountBDesired, reserveB, reserveA);
                 assert(amountAOptimal <= amountADesired);
                 require(amountAOptimal >= amountAMin, "BaseV1Router: INSUFFICIENT_A_AMOUNT");
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
@@ -248,15 +205,7 @@ contract BaseV1Router01 is Initializable {
         address to,
         uint256 deadline
     ) external ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
-        (amountA, amountB) = _addLiquidity(
-            tokenA,
-            tokenB,
-            stable,
-            amountADesired,
-            amountBDesired,
-            amountAMin,
-            amountBMin
-        );
+        (amountA, amountB) = _addLiquidity(tokenA, tokenB, stable, amountADesired, amountBDesired, amountAMin, amountBMin);
         address pair = pairFor(tokenA, tokenB, stable);
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(tokenA), msg.sender, pair, amountA);
         SafeERC20Upgradeable.safeTransferFrom(IERC20Upgradeable(tokenB), msg.sender, pair, amountB);
@@ -271,21 +220,8 @@ contract BaseV1Router01 is Initializable {
         uint256 amountETHMin,
         address to,
         uint256 deadline
-    )
-        external
-        payable
-        ensure(deadline)
-        returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)
-    {
-        (amountToken, amountETH) = _addLiquidity(
-            token,
-            address(weth),
-            stable,
-            amountTokenDesired,
-            msg.value,
-            amountTokenMin,
-            amountETHMin
-        );
+    ) external payable ensure(deadline) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
+        (amountToken, amountETH) = _addLiquidity(token, address(weth), stable, amountTokenDesired, msg.value, amountTokenMin, amountETHMin);
         address pair = pairFor(token, address(weth), stable);
         IERC20Upgradeable(token).safeTransferFrom(msg.sender, pair, amountToken);
         weth.deposit{value: amountETH}();
@@ -324,16 +260,7 @@ contract BaseV1Router01 is Initializable {
         address to,
         uint256 deadline
     ) public ensure(deadline) returns (uint256 amountToken, uint256 amountETH) {
-        (amountToken, amountETH) = removeLiquidity(
-            token,
-            address(weth),
-            stable,
-            liquidity,
-            amountTokenMin,
-            amountETHMin,
-            address(this),
-            deadline
-        );
+        (amountToken, amountETH) = removeLiquidity(token, address(weth), stable, liquidity, amountTokenMin, amountETHMin, address(this), deadline);
         IERC20Upgradeable(token).safeTransfer(to, amountToken);
         weth.withdraw(amountETH);
         _safeTransferETH(to, amountETH);
@@ -359,16 +286,7 @@ contract BaseV1Router01 is Initializable {
             IPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
         }
 
-        (amountA, amountB) = removeLiquidity(
-            tokenA,
-            tokenB,
-            stable,
-            liquidity,
-            amountAMin,
-            amountBMin,
-            to,
-            deadline
-        );
+        (amountA, amountB) = removeLiquidity(tokenA, tokenB, stable, liquidity, amountAMin, amountBMin, to, deadline);
     }
 
     function removeLiquidityETHWithPermit(
@@ -387,15 +305,7 @@ contract BaseV1Router01 is Initializable {
         address pair = pairFor(token, address(weth), stable);
         uint256 value = approveMax ? type(uint256).max : liquidity;
         IPair(pair).permit(msg.sender, address(this), value, deadline, v, r, s);
-        (amountToken, amountETH) = removeLiquidityETH(
-            token,
-            stable,
-            liquidity,
-            amountTokenMin,
-            amountETHMin,
-            to,
-            deadline
-        );
+        (amountToken, amountETH) = removeLiquidityETH(token, stable, liquidity, amountTokenMin, amountETHMin, to, deadline);
     }
 
     // **** SWAP ****
@@ -404,18 +314,9 @@ contract BaseV1Router01 is Initializable {
         for (uint256 i = 0; i < routes.length; i++) {
             (address token0, ) = SatinLibrary.sortTokens(routes[i].from, routes[i].to);
             uint256 amountOut = amounts[i + 1];
-            (uint256 amount0Out, uint256 amount1Out) = routes[i].from == token0
-                ? (uint256(0), amountOut)
-                : (amountOut, uint256(0));
-            address to = i < routes.length - 1
-                ? pairFor(routes[i + 1].from, routes[i + 1].to, routes[i + 1].stable)
-                : _to;
-            IPair(pairFor(routes[i].from, routes[i].to, routes[i].stable)).swap(
-                amount0Out,
-                amount1Out,
-                to,
-                new bytes(0)
-            );
+            (uint256 amount0Out, uint256 amount1Out) = routes[i].from == token0 ? (uint256(0), amountOut) : (amountOut, uint256(0));
+            address to = i < routes.length - 1 ? pairFor(routes[i + 1].from, routes[i + 1].to, routes[i + 1].stable) : _to;
+            IPair(pairFor(routes[i].from, routes[i].to, routes[i].stable)).swap(amount0Out, amount1Out, to, new bytes(0));
         }
     }
 
@@ -433,15 +334,8 @@ contract BaseV1Router01 is Initializable {
         routes[0].to = tokenTo;
         routes[0].stable = stable;
         amounts = getAmountsOut(amountIn, routes);
-        require(
-            amounts[amounts.length - 1] >= amountOutMin,
-            "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
-        IERC20Upgradeable(routes[0].from).safeTransferFrom(
-            msg.sender,
-            pairFor(routes[0].from, routes[0].to, routes[0].stable),
-            amounts[0]
-        );
+        require(amounts[amounts.length - 1] >= amountOutMin, "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT");
+        IERC20Upgradeable(routes[0].from).safeTransferFrom(msg.sender, pairFor(routes[0].from, routes[0].to, routes[0].stable), amounts[0]);
         _swap(amounts, routes, to);
     }
 
@@ -453,15 +347,8 @@ contract BaseV1Router01 is Initializable {
         uint256 deadline
     ) external ensure(deadline) returns (uint256[] memory amounts) {
         amounts = getAmountsOut(amountIn, routes);
-        require(
-            amounts[amounts.length - 1] >= amountOutMin,
-            "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
-        IERC20Upgradeable(routes[0].from).safeTransferFrom(
-            msg.sender,
-            pairFor(routes[0].from, routes[0].to, routes[0].stable),
-            amounts[0]
-        );
+        require(amounts[amounts.length - 1] >= amountOutMin, "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT");
+        IERC20Upgradeable(routes[0].from).safeTransferFrom(msg.sender, pairFor(routes[0].from, routes[0].to, routes[0].stable), amounts[0]);
         _swap(amounts, routes, to);
     }
 
@@ -473,10 +360,7 @@ contract BaseV1Router01 is Initializable {
     ) external payable ensure(deadline) returns (uint256[] memory amounts) {
         require(routes[0].from == address(weth), "BaseV1Router: INVALID_PATH");
         amounts = getAmountsOut(msg.value, routes);
-        require(
-            amounts[amounts.length - 1] >= amountOutMin,
-            "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
+        require(amounts[amounts.length - 1] >= amountOutMin, "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT");
         weth.deposit{value: amounts[0]}();
         assert(weth.transfer(pairFor(routes[0].from, routes[0].to, routes[0].stable), amounts[0]));
         _swap(amounts, routes, to);
@@ -491,31 +375,15 @@ contract BaseV1Router01 is Initializable {
     ) external ensure(deadline) returns (uint256[] memory amounts) {
         require(routes[routes.length - 1].to == address(weth), "BaseV1Router: INVALID_PATH");
         amounts = getAmountsOut(amountIn, routes);
-        require(
-            amounts[amounts.length - 1] >= amountOutMin,
-            "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
-        IERC20Upgradeable(routes[0].from).safeTransferFrom(
-            msg.sender,
-            pairFor(routes[0].from, routes[0].to, routes[0].stable),
-            amounts[0]
-        );
+        require(amounts[amounts.length - 1] >= amountOutMin, "BaseV1Router: INSUFFICIENT_OUTPUT_AMOUNT");
+        IERC20Upgradeable(routes[0].from).safeTransferFrom(msg.sender, pairFor(routes[0].from, routes[0].to, routes[0].stable), amounts[0]);
         _swap(amounts, routes, address(this));
         weth.withdraw(amounts[amounts.length - 1]);
         _safeTransferETH(to, amounts[amounts.length - 1]);
     }
 
-    function UNSAFE_swapExactTokensForTokens(
-        uint256[] memory amounts,
-        route[] calldata routes,
-        address to,
-        uint256 deadline
-    ) external ensure(deadline) returns (uint256[] memory) {
-        IERC20Upgradeable(routes[0].from).safeTransferFrom(
-            msg.sender,
-            pairFor(routes[0].from, routes[0].to, routes[0].stable),
-            amounts[0]
-        );
+    function UNSAFE_swapExactTokensForTokens(uint256[] memory amounts, route[] calldata routes, address to, uint256 deadline) external ensure(deadline) returns (uint256[] memory) {
+        IERC20Upgradeable(routes[0].from).safeTransferFrom(msg.sender, pairFor(routes[0].from, routes[0].to, routes[0].stable), amounts[0]);
         _swap(amounts, routes, to);
         return amounts;
     }

@@ -6,6 +6,7 @@ import "../../lib/Math.sol";
 import "../../interface/IERC20.sol";
 import "../../interface/IVeDist.sol";
 import "../../interface/IVe.sol";
+import "../../interface/IVoter.sol";
 import "../../lib/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -24,25 +25,43 @@ contract VeDist is IVeDist, Initializable {
         bool success;
     }
 
+    struct EmissionsCalculationResult {
+        uint cashToDistribute;
+        uint tokenToDistribute;
+        uint userEpoch;
+        uint weekCursor;
+        uint maxUserEpoch;
+        bool success;
+    }
+
     uint constant WEEK = 7 * 86400;
 
     uint public startTime;
     uint public timeCursor;
     uint public minLockDurationForReward;
     mapping(uint => uint) public timeCursorOf;
+    mapping(uint => uint) public emissionTimeCursorOf;
     mapping(uint => uint) public userEpochOf;
+    mapping(uint => uint) public emissionUserEpochOf;
 
     uint public lastTokenTime;
     uint[1000000000000000] public tokensPerWeek;
 
     address public votingEscrow;
     address public token;
+    address public voter;
     uint public tokenLastBalance;
 
     uint[1000000000000000] public veSupply;
 
     address public depositor;
     address public owner;
+
+    mapping(address => uint[1000000000000000]) public tokenEmissionPerWeek;
+
+    address cash;
+    uint lastEmissionsTime;
+    uint cashLastBalance;
 
     // constructor(address _votingEscrow, address token_) {
     // uint _t = (block.timestamp / WEEK) * WEEK;
@@ -56,18 +75,25 @@ contract VeDist is IVeDist, Initializable {
     // IERC20(_token).safeIncreaseAllowance(_votingEscrow, type(uint).max);
     // }
 
-    function initialize(address _votingEscrow, address token_) public initializer {
+    function initialize(address _votingEscrow, address token_, address _cash) public initializer {
         uint _t = (block.timestamp / WEEK) * WEEK;
         startTime = _t;
         lastTokenTime = _t;
+        lastEmissionsTime = _t;
         timeCursor = _t;
         address _token = token_;
         token = _token;
+        cash = _cash;
         votingEscrow = _votingEscrow;
         depositor = msg.sender;
         owner = msg.sender;
         minLockDurationForReward = 6 * 30 * 86400;
         IERC20(_token).safeIncreaseAllowance(_votingEscrow, type(uint).max);
+    }
+
+    function setVoter(address _voter) external {
+        require(msg.sender == owner, "!owner");
+        voter = _voter;
     }
 
     function timestamp() external view returns (uint) {
@@ -77,6 +103,36 @@ contract VeDist is IVeDist, Initializable {
     function setMinLockDurationForReward(uint _minLockDurationForReward) external {
         require(msg.sender == owner);
         minLockDurationForReward = _minLockDurationForReward;
+    }
+
+    function _checkpointEmissions() internal {
+        IVoter(voter).getVeShare();
+        uint cashBalance = IERC20(cash).balanceOf(address(this));
+        uint tokenBalance = IERC20(token).balanceOf(address(this));
+        uint tokenToDistribute = tokenBalance - tokenLastBalance;
+        uint cashToDistribute = cashBalance - cashLastBalance;
+        tokenLastBalance = tokenBalance;
+        cashLastBalance = cashBalance;
+
+        uint t = lastEmissionsTime;
+        uint sinceLast = block.timestamp - t;
+        lastEmissionsTime = block.timestamp;
+        uint thisWeek = (t / WEEK) * WEEK;
+        uint nextWeek = 0;
+
+        for (uint i = 0; i < 20; i++) {
+            nextWeek = thisWeek + WEEK;
+            if (block.timestamp < nextWeek) {
+                tokenEmissionPerWeek[token][thisWeek] += _adjustToDistribute(tokenToDistribute, block.timestamp, t, sinceLast);
+                tokenEmissionPerWeek[cash][thisWeek] += _adjustToDistribute(cashToDistribute, block.timestamp, t, sinceLast);
+                break;
+            } else {
+                tokenEmissionPerWeek[token][thisWeek] += _adjustToDistribute(tokenToDistribute, nextWeek, t, sinceLast);
+                tokenEmissionPerWeek[cash][thisWeek] += _adjustToDistribute(cashToDistribute, nextWeek, t, sinceLast);
+            }
+            t = nextWeek;
+            thisWeek = nextWeek;
+        }
     }
 
     function _checkpointToken() internal {
@@ -93,20 +149,10 @@ contract VeDist is IVeDist, Initializable {
         for (uint i = 0; i < 20; i++) {
             nextWeek = thisWeek + WEEK;
             if (block.timestamp < nextWeek) {
-                tokensPerWeek[thisWeek] += _adjustToDistribute(
-                    toDistribute,
-                    block.timestamp,
-                    t,
-                    sinceLast
-                );
+                tokensPerWeek[thisWeek] += _adjustToDistribute(toDistribute, block.timestamp, t, sinceLast);
                 break;
             } else {
-                tokensPerWeek[thisWeek] += _adjustToDistribute(
-                    toDistribute,
-                    nextWeek,
-                    t,
-                    sinceLast
-                );
+                tokensPerWeek[thisWeek] += _adjustToDistribute(toDistribute, nextWeek, t, sinceLast);
             }
             t = nextWeek;
             thisWeek = nextWeek;
@@ -115,21 +161,11 @@ contract VeDist is IVeDist, Initializable {
     }
 
     /// @dev For testing purposes.
-    function adjustToDistribute(
-        uint toDistribute,
-        uint t0,
-        uint t1,
-        uint sinceLastCall
-    ) external pure returns (uint) {
+    function adjustToDistribute(uint toDistribute, uint t0, uint t1, uint sinceLastCall) external pure returns (uint) {
         return _adjustToDistribute(toDistribute, t0, t1, sinceLastCall);
     }
 
-    function _adjustToDistribute(
-        uint toDistribute,
-        uint t0,
-        uint t1,
-        uint sinceLast
-    ) internal pure returns (uint) {
+    function _adjustToDistribute(uint toDistribute, uint t0, uint t1, uint sinceLast) internal pure returns (uint) {
         if (t0 <= t1 || t0 - t1 == 0 || sinceLast == 0) {
             return toDistribute;
         }
@@ -139,6 +175,11 @@ contract VeDist is IVeDist, Initializable {
     function checkpointToken() external override {
         require(msg.sender == depositor, "!depositor");
         _checkpointToken();
+    }
+
+    function checkpointEmissions() external override {
+        require(msg.sender == depositor, "!depositor");
+        _checkpointEmissions();
     }
 
     function _findTimestampEpoch(address ve, uint _timestamp) internal view returns (uint) {
@@ -157,21 +198,11 @@ contract VeDist is IVeDist, Initializable {
         return _min;
     }
 
-    function findTimestampUserEpoch(
-        address ve,
-        uint tokenId,
-        uint _timestamp,
-        uint maxUserEpoch
-    ) external view returns (uint) {
+    function findTimestampUserEpoch(address ve, uint tokenId, uint _timestamp, uint maxUserEpoch) external view returns (uint) {
         return _findTimestampUserEpoch(ve, tokenId, _timestamp, maxUserEpoch);
     }
 
-    function _findTimestampUserEpoch(
-        address ve,
-        uint tokenId,
-        uint _timestamp,
-        uint maxUserEpoch
-    ) internal view returns (uint) {
+    function _findTimestampUserEpoch(address ve, uint tokenId, uint _timestamp, uint maxUserEpoch) internal view returns (uint) {
         uint _min = 0;
         uint _max = maxUserEpoch;
         for (uint i = 0; i < 128; i++) {
@@ -192,12 +223,7 @@ contract VeDist is IVeDist, Initializable {
         uint maxUserEpoch = IVe(ve).userPointEpoch(_tokenId);
         uint epoch = _findTimestampUserEpoch(ve, _tokenId, _timestamp, maxUserEpoch);
         IVe.Point memory pt = IVe(ve).userPointHistory(_tokenId, epoch);
-        return
-            uint(
-                int256(
-                    Math.positiveInt128(pt.bias - pt.slope * (int128(int256(_timestamp - pt.ts))))
-                )
-            );
+        return uint(int256(Math.positiveInt128(pt.bias - pt.slope * (int128(int256(_timestamp - pt.ts))))));
     }
 
     function _checkpointTotalSupply() internal {
@@ -220,21 +246,11 @@ contract VeDist is IVeDist, Initializable {
         timeCursor = t;
     }
 
-    function adjustVeSupply(
-        uint t,
-        uint ptTs,
-        int128 ptBias,
-        int128 ptSlope
-    ) external pure returns (uint) {
+    function adjustVeSupply(uint t, uint ptTs, int128 ptBias, int128 ptSlope) external pure returns (uint) {
         return _adjustVeSupply(t, ptTs, ptBias, ptSlope);
     }
 
-    function _adjustVeSupply(
-        uint t,
-        uint ptTs,
-        int128 ptBias,
-        int128 ptSlope
-    ) internal pure returns (uint) {
+    function _adjustVeSupply(uint t, uint ptTs, int128 ptBias, int128 ptSlope) internal pure returns (uint) {
         if (t < ptTs) {
             return 0;
         }
@@ -259,11 +275,17 @@ contract VeDist is IVeDist, Initializable {
         return result.toDistribute;
     }
 
-    function _calculateClaim(
-        uint _tokenId,
-        address ve,
-        uint _lastTokenTime
-    ) internal view returns (ClaimCalculationResult memory) {
+    function _claimEmissions(uint _tokenId, address ve, uint _lastEmissionsTime) internal returns (uint, uint) {
+        EmissionsCalculationResult memory result = _calculateEmissionsClaim(_tokenId, ve, _lastEmissionsTime);
+        if (result.success) {
+            emissionUserEpochOf[_tokenId] = result.userEpoch;
+            emissionTimeCursorOf[_tokenId] = result.weekCursor;
+            // emit Claimed(_tokenId, result.toDistribute, result.userEpoch, result.maxUserEpoch);
+        }
+        return (result.cashToDistribute, result.tokenToDistribute);
+    }
+
+    function _calculateClaim(uint _tokenId, address ve, uint _lastTokenTime) internal view returns (ClaimCalculationResult memory) {
         uint userEpoch;
         uint toDistribute;
         uint maxUserEpoch = IVe(ve).userPointEpoch(_tokenId);
@@ -311,39 +333,95 @@ contract VeDist is IVeDist, Initializable {
                     }
                 } else {
                     int128 dt = int128(int256(weekCursor - oldUserPoint.ts));
-                    uint balanceOf = uint(
-                        int256(Math.positiveInt128(oldUserPoint.bias - dt * oldUserPoint.slope))
-                    );
+                    uint balanceOf = uint(int256(Math.positiveInt128(oldUserPoint.bias - dt * oldUserPoint.slope)));
                     if (balanceOf == 0 && userEpoch > maxUserEpoch) {
                         break;
                     }
-                    if ((lockEndTime - oldUserPoint.ts) > (minLockDurationForReward)) {
-                        toDistribute +=
-                            (balanceOf * tokensPerWeek[weekCursor]) /
-                            veSupply[weekCursor];
+                    if ((lockEndTime - weekCursor) > (minLockDurationForReward)) {
+                        if (veSupply[weekCursor] > 0) {
+                            toDistribute += (balanceOf * tokensPerWeek[weekCursor]) / veSupply[weekCursor];
+                        }
                         weekCursor += WEEK;
+                    } else {
+                        break;
                     }
                 }
             }
         }
-        return
-            ClaimCalculationResult(
-                toDistribute,
-                Math.min(maxUserEpoch, userEpoch - 1),
-                weekCursor,
-                maxUserEpoch,
-                true
-            );
+        return ClaimCalculationResult(toDistribute, Math.min(maxUserEpoch, userEpoch - 1), weekCursor, maxUserEpoch, true);
+    }
+
+    function _calculateEmissionsClaim(uint _tokenId, address ve, uint _lastTokenTime) internal view returns (EmissionsCalculationResult memory) {
+        uint userEpoch;
+        uint cashToDistribute;
+        uint tokenToDistribute;
+        uint maxUserEpoch = IVe(ve).userPointEpoch(_tokenId);
+        uint _startTime = startTime;
+
+        if (maxUserEpoch == 0) {
+            return EmissionsCalculationResult(0, 0, 0, 0, 0, false);
+        }
+
+        uint weekCursor = emissionTimeCursorOf[_tokenId];
+
+        if (weekCursor == 0) {
+            userEpoch = _findTimestampUserEpoch(ve, _tokenId, _startTime, maxUserEpoch);
+        } else {
+            userEpoch = emissionUserEpochOf[_tokenId];
+        }
+
+        if (userEpoch == 0) userEpoch = 1;
+
+        IVe.Point memory userPoint = IVe(ve).userPointHistory(_tokenId, userEpoch);
+        if (weekCursor == 0) {
+            weekCursor = ((userPoint.ts + WEEK - 1) / WEEK) * WEEK;
+        }
+        if (weekCursor >= lastTokenTime) {
+            return EmissionsCalculationResult(0, 0, 0, 0, 0, false);
+        }
+        if (weekCursor < _startTime) {
+            weekCursor = _startTime;
+        }
+
+        IVe.Point memory oldUserPoint;
+        {
+            for (uint i = 0; i < 50; i++) {
+                if (weekCursor >= _lastTokenTime) {
+                    break;
+                }
+                if (weekCursor >= userPoint.ts && userEpoch <= maxUserEpoch) {
+                    userEpoch += 1;
+                    oldUserPoint = userPoint;
+                    if (userEpoch > maxUserEpoch) {
+                        userPoint = IVe.Point(0, 0, 0, 0);
+                    } else {
+                        userPoint = IVe(ve).userPointHistory(_tokenId, userEpoch);
+                    }
+                } else {
+                    int128 dt = int128(int256(weekCursor - oldUserPoint.ts));
+                    uint balanceOf = uint(int256(Math.positiveInt128(oldUserPoint.bias - dt * oldUserPoint.slope)));
+                    if (balanceOf == 0 && userEpoch > maxUserEpoch) {
+                        break;
+                    }
+                    cashToDistribute += (balanceOf * tokenEmissionPerWeek[cash][weekCursor]) / veSupply[weekCursor];
+                    tokenToDistribute += (balanceOf * tokenEmissionPerWeek[token][weekCursor]) / veSupply[weekCursor];
+                    weekCursor += WEEK;
+                }
+            }
+        }
+        return EmissionsCalculationResult(cashToDistribute, tokenToDistribute, Math.min(maxUserEpoch, userEpoch - 1), weekCursor, maxUserEpoch, true);
     }
 
     function claimable(uint _tokenId) external view returns (uint) {
         uint _lastTokenTime = (lastTokenTime / WEEK) * WEEK;
-        ClaimCalculationResult memory result = _calculateClaim(
-            _tokenId,
-            votingEscrow,
-            _lastTokenTime
-        );
+        ClaimCalculationResult memory result = _calculateClaim(_tokenId, votingEscrow, _lastTokenTime);
         return result.toDistribute;
+    }
+
+    function emissionsClaimable(uint _tokenId) external view returns (uint, uint) {
+        uint _lastEmissionsTime = (lastEmissionsTime / WEEK) * WEEK;
+        EmissionsCalculationResult memory result = _calculateEmissionsClaim(_tokenId, votingEscrow, _lastEmissionsTime);
+        return (result.cashToDistribute, result.tokenToDistribute);
     }
 
     function claim(uint _tokenId) external returns (uint) {
@@ -356,6 +434,23 @@ contract VeDist is IVeDist, Initializable {
             tokenLastBalance -= amount;
         }
         return amount;
+    }
+
+    function claimEmissions(uint _tokenId) external returns (uint, uint) {
+        if (block.timestamp >= timeCursor) _checkpointTotalSupply();
+        uint _lastEmissionsTime = lastEmissionsTime;
+        _lastEmissionsTime = (_lastEmissionsTime / WEEK) * WEEK;
+        (uint cashAmount, uint tokenAmount) = _claimEmissions(_tokenId, votingEscrow, _lastEmissionsTime);
+
+        if (cashAmount != 0) {
+            IERC20(cash).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), cashAmount);
+            cashLastBalance -= cashAmount;
+        }
+        if (tokenAmount != 0) {
+            IERC20(token).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), tokenAmount);
+            tokenLastBalance -= tokenAmount;
+        }
+        return (cashAmount, tokenAmount);
     }
 
     function claimMany(uint[] memory _tokenIds) external returns (bool) {

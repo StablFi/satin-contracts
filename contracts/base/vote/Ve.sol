@@ -7,10 +7,15 @@ import "../../interface/IERC20.sol";
 import "../../interface/IERC721.sol";
 import "../../interface/IERC721Metadata.sol";
 import "../../interface/IVe.sol";
+import "../../interface/IVeDist.sol";
 import "../../interface/IERC721Receiver.sol";
 import "../../interface/IController.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "../../lib/SafeERC20.sol";
+import "../../interface/IPair.sol";
+import "../../interface/IMultiRewardsPool.sol";
+import "../../interface/IBribe.sol";
+import "../../interface/IVoter.sol";
 import "../../lib/Math.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
@@ -25,6 +30,8 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     address public override token;
     address public VeOwner;
     uint public supply;
+    uint public fees0;
+    uint public fees1;
     mapping(uint => LockedBalance) public locked;
 
     mapping(uint => uint) public ownershipChange;
@@ -83,16 +90,10 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @dev ERC165 interface ID of ERC721Metadata
     bytes4 internal constant ERC721_METADATA_INTERFACE_ID = 0x5b5e139f;
 
-    event Deposit(
-        address indexed provider,
-        uint tokenId,
-        uint value,
-        uint indexed locktime,
-        DepositType depositType,
-        uint ts
-    );
+    event Deposit(address indexed provider, uint tokenId, uint value, uint indexed locktime, DepositType depositType, uint ts);
     event Withdraw(address indexed provider, uint tokenId, uint value, uint ts);
     event Supply(uint prevSupply, uint supply);
+    event ClaimFees(address indexed from, uint claimed0, uint claimed1);
 
     /// @notice Contract constructor
     // constructor(address controller_) {
@@ -112,6 +113,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     // }
 
     function initialize(address controller_) public initializer {
+        __ReentrancyGuard_init_unchained();
         controller = controller_;
         VeOwner = msg.sender;
         _pointHistory[0].blk = block.number;
@@ -131,6 +133,10 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     function postInitialize(address token_) external {
         require(VeOwner == msg.sender, "Not initializer");
         token = token_;
+    }
+
+    function _veDist() internal view returns (address) {
+        return IController(controller).veDist();
     }
 
     function _voter() internal view returns (address) {
@@ -195,10 +201,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @dev Checks if `_operator` is an approved operator for `_owner`.
     /// @param _owner The address that owns the NFTs.
     /// @param _operator The address that acts on behalf of the owner.
-    function isApprovedForAll(
-        address _owner,
-        address _operator
-    ) external view override returns (bool) {
+    function isApprovedForAll(address _owner, address _operator) external view override returns (bool) {
         return (ownerToOperators[_owner])[_operator];
     }
 
@@ -219,10 +222,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         return spenderIsOwner || spenderIsApproved || spenderIsApprovedForAll;
     }
 
-    function isApprovedOrOwner(
-        address _spender,
-        uint _tokenId
-    ) external view override returns (bool) {
+    function isApprovedOrOwner(address _spender, uint _tokenId) external view override returns (bool) {
         return _isApprovedOrOwner(_spender, _tokenId);
     }
 
@@ -351,19 +351,12 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @param _to The new owner.
     /// @param _tokenId The NFT to transfer.
     /// @param _data Additional data with no specified format, sent in call to `_to`.
-    function safeTransferFrom(
-        address _from,
-        address _to,
-        uint _tokenId,
-        bytes memory _data
-    ) public override {
+    function safeTransferFrom(address _from, address _to, uint _tokenId, bytes memory _data) public override {
         _transferFrom(_from, _to, _tokenId, msg.sender);
 
         if (_isContract(_to)) {
             // Throws if transfer destination is a contract which does not implement 'onERC721Received'
-            try IERC721Receiver(_to).onERC721Received(msg.sender, _from, _tokenId, _data) returns (
-                bytes4
-            ) {} catch (bytes memory reason) {
+            try IERC721Receiver(_to).onERC721Received(msg.sender, _from, _tokenId, _data) returns (bytes4) {} catch (bytes memory reason) {
                 if (reason.length == 0) {
                     revert("ERC721: transfer to non ERC721Receiver implementer");
                 } else {
@@ -443,11 +436,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @param _tokenId NFT token ID. No user checkpoint if 0
     /// @param oldLocked Pevious locked amount / end lock time for the user
     /// @param newLocked New locked amount / end lock time for the user
-    function _checkpoint(
-        uint _tokenId,
-        LockedBalance memory oldLocked,
-        LockedBalance memory newLocked
-    ) internal {
+    function _checkpoint(uint _tokenId, LockedBalance memory oldLocked, LockedBalance memory newLocked) internal {
         Point memory uOld;
         Point memory uNew;
         int128 oldDSlope = 0;
@@ -491,9 +480,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         uint blockSlope = 0;
         // dblock/dt
         if (block.timestamp > lastPoint.ts) {
-            blockSlope =
-                (MULTIPLIER * (block.number - lastPoint.blk)) /
-                (block.timestamp - lastPoint.ts);
+            blockSlope = (MULTIPLIER * (block.number - lastPoint.blk)) / (block.timestamp - lastPoint.ts);
         }
         // If last point is already recorded in this block, slope=0
         // But that's ok b/c we know the block in such case
@@ -511,16 +498,11 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
                 } else {
                     dSlope = slopeChanges[ti];
                 }
-                lastPoint.bias = Math.positiveInt128(
-                    lastPoint.bias - lastPoint.slope * int128(int256(ti - lastCheckpoint))
-                );
+                lastPoint.bias = Math.positiveInt128(lastPoint.bias - lastPoint.slope * int128(int256(ti - lastCheckpoint)));
                 lastPoint.slope = Math.positiveInt128(lastPoint.slope + dSlope);
                 lastCheckpoint = ti;
                 lastPoint.ts = ti;
-                lastPoint.blk =
-                    initialLastPoint.blk +
-                    (blockSlope * (ti - initialLastPoint.ts)) /
-                    MULTIPLIER;
+                lastPoint.blk = initialLastPoint.blk + (blockSlope * (ti - initialLastPoint.ts)) / MULTIPLIER;
                 _epoch += 1;
                 if (ti == block.timestamp) {
                     lastPoint.blk = block.number;
@@ -582,13 +564,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @param unlockTime New time when to unlock the tokens, or 0 if unchanged
     /// @param lockedBalance Previous locked amount / timestamp
     /// @param depositType The type of deposit
-    function _depositFor(
-        uint _tokenId,
-        uint _value,
-        uint unlockTime,
-        LockedBalance memory lockedBalance,
-        DepositType depositType
-    ) internal {
+    function _depositFor(uint _tokenId, uint _value, uint unlockTime, LockedBalance memory lockedBalance, DepositType depositType) internal {
         LockedBalance memory _locked = lockedBalance;
         uint supplyBefore = supply;
 
@@ -623,13 +599,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @param unlockTime New time when to unlock the tokens, or 0 if unchanged
     /// @param lockedBalance Previous locked amount / timestamp
     /// @param depositType The type of deposit
-    function _depositForOwner(
-        uint _tokenId,
-        uint _value,
-        uint unlockTime,
-        LockedBalance memory lockedBalance,
-        DepositType depositType
-    ) internal {
+    function _depositForOwner(uint _tokenId, uint _value, uint unlockTime, LockedBalance memory lockedBalance, DepositType depositType) internal {
         LockedBalance memory _locked = lockedBalance;
         uint supplyBefore = supply;
 
@@ -691,6 +661,10 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         uint value0 = uint(int256(_locked0.amount));
         uint end = _locked0.end >= _locked1.end ? _locked0.end : _locked1.end;
 
+        require(end > block.timestamp, "expired"); //<== CHECK NOT EXPIRED
+        supply -= value0; //<== ADJUST SUPPLY CORRECTLY
+
+        IVeDist(_veDist()).claim(_from);
         locked[_from] = LockedBalance(0, 0);
         _checkpoint(_from, _locked0, LockedBalance(0, 0));
         _burn(_from);
@@ -742,11 +716,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     /// @param _value Amount to deposit
     /// @param _lockDuration Number of seconds to lock tokens for (rounded down to nearest week)
     /// @param _to Address to deposit
-    function createLockFor(
-        uint _value,
-        uint _lockDuration,
-        address _to
-    ) external override nonReentrant returns (uint) {
+    function createLockFor(uint _value, uint _lockDuration, address _to) external override nonReentrant returns (uint) {
         return _createLock(_value, _lockDuration, _to);
     }
 
@@ -765,6 +735,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         require(_locked.end > block.timestamp, "Cannot add to expired lock. Withdraw");
         require(_isApprovedOrOwner(msg.sender, _tokenId), "!owner");
         require(_value > 0, "zero value");
+        require(!isOwnerNFTID[_tokenId], "OwnerNFT");
 
         _depositFor(_tokenId, _value, 0, _locked, DepositType.INCREASE_LOCK_AMOUNT);
     }
@@ -795,6 +766,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         require(block.timestamp >= _locked.end, "The lock did not expire");
 
         uint value = uint(int256(_locked.amount));
+        IVeDist(_veDist()).claim(_tokenId);
         locked[_tokenId] = LockedBalance(0, 0);
         uint supplyBefore = supply;
         supply = supplyBefore - value;
@@ -840,6 +812,16 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         return _min;
     }
 
+    /// @notice Gets the total voting power.
+    /// @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
+    /// @return totalVotingPower total voting power
+    function getTotalVotingPower() external view override returns (uint totalVotingPower) {
+        totalVotingPower = 0;
+        for (uint i = 1; i <= tokenId; i++) {
+            totalVotingPower += _balanceOfNFT(i, block.timestamp);
+        }
+    }
+
     /// @notice Get the current voting power for `_tokenId`
     /// @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
     /// @param _tokenId NFT for lock
@@ -864,13 +846,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     function tokenURI(uint _tokenId) external view override returns (string memory) {
         require(idToOwner[_tokenId] != address(0), "Query for nonexistent token");
         LockedBalance memory _locked = locked[_tokenId];
-        return
-            _tokenURI(
-                _tokenId,
-                _balanceOfNFT(_tokenId, block.timestamp),
-                _locked.end,
-                uint(int256(_locked.amount))
-            );
+        return _tokenURI(_tokenId, _balanceOfNFT(_tokenId, block.timestamp), _locked.end, uint(int256(_locked.amount)));
     }
 
     function balanceOfNFT(uint _tokenId) external view override returns (uint) {
@@ -939,6 +915,38 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         return _balanceOfAtNFT(_tokenId, _block);
     }
 
+    function claimFees() external nonReentrant returns (uint claimed0, uint claimed1) {
+        return _claimFees();
+    }
+
+    function _claimFees() internal returns (uint claimed0, uint claimed1) {
+        address _underlying = token;
+        (claimed0, claimed1) = IPair(_underlying).claimFees();
+        address gauge = IVoter(_voter()).gauges(token);
+        address bribe = IVoter(_voter()).bribes(gauge);
+        if (claimed0 > 0 || claimed1 > 0) {
+            uint _fees0 = fees0 + claimed0;
+            uint _fees1 = fees1 + claimed1;
+            (address _token0, address _token1) = IPair(_underlying).tokens();
+            if (_fees0 > IMultiRewardsPool(bribe).left(_token0)) {
+                fees0 = 0;
+                IERC20(_token0).safeIncreaseAllowance(bribe, _fees0);
+                IBribe(bribe).notifyRewardAmount(_token0, _fees0);
+            } else {
+                fees0 = _fees0;
+            }
+            if (_fees1 > IMultiRewardsPool(bribe).left(_token1)) {
+                fees1 = 0;
+                IERC20(_token1).safeIncreaseAllowance(bribe, _fees1);
+                IBribe(bribe).notifyRewardAmount(_token1, _fees1);
+            } else {
+                fees1 = _fees1;
+            }
+
+            emit ClaimFees(msg.sender, claimed0, claimed1);
+        }
+    }
+
     /// @notice Calculate total voting power at some point in the past
     /// @param point The point (bias/slope) to start search from
     /// @param t Time to calculate the total voting power at
@@ -998,46 +1006,18 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
             dt = ((_block - point.blk) * (point_next.ts - point.ts)) / (point_next.blk - point.blk);
         } else {
             if (point.blk != block.number) {
-                dt =
-                    ((_block - point.blk) * (block.timestamp - point.ts)) /
-                    (block.number - point.blk);
+                dt = ((_block - point.blk) * (block.timestamp - point.ts)) / (block.number - point.blk);
             }
         }
         // Now dt contains info on how far are we beyond point
         return _supplyAt(point, point.ts + dt);
     }
 
-    function _tokenURI(
-        uint _tokenId,
-        uint _balanceOf,
-        uint _locked_end,
-        uint _value
-    ) internal pure returns (string memory output) {
+    function _tokenURI(uint _tokenId, uint _balanceOf, uint _locked_end, uint _value) internal pure returns (string memory output) {
         output = '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 350 350"><style>.base { fill: black; font-family: Impact; font-size: 50px; }</style><rect width="100%" height="100%" fill="#aaaaff" /><text x="10" y="60" class="base">';
-        output = string(
-            abi.encodePacked(
-                output,
-                "token ",
-                _toString(_tokenId),
-                '</text><text x="10" y="150" class="base">'
-            )
-        );
-        output = string(
-            abi.encodePacked(
-                output,
-                "balanceOf ",
-                _toString(_balanceOf),
-                '</text><text x="10" y="230" class="base">'
-            )
-        );
-        output = string(
-            abi.encodePacked(
-                output,
-                "locked_end ",
-                _toString(_locked_end),
-                '</text><text x="10" y="310" class="base">'
-            )
-        );
+        output = string(abi.encodePacked(output, "token ", _toString(_tokenId), '</text><text x="10" y="150" class="base">'));
+        output = string(abi.encodePacked(output, "balanceOf ", _toString(_balanceOf), '</text><text x="10" y="230" class="base">'));
+        output = string(abi.encodePacked(output, "locked_end ", _toString(_locked_end), '</text><text x="10" y="310" class="base">'));
         output = string(abi.encodePacked(output, "value ", _toString(_value), "</text></svg>"));
 
         string memory json = Base64.encode(
@@ -1087,10 +1067,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         emit Transfer(owner, address(0), _tokenId);
     }
 
-    function userPointHistory(
-        uint _tokenId,
-        uint _loc
-    ) external view override returns (Point memory) {
+    function userPointHistory(uint _tokenId, uint _loc) external view override returns (Point memory) {
         return _userPointHistory[_tokenId][_loc];
     }
 
@@ -1099,12 +1076,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     }
 
     // ADMIN FUNCTIONS
-
-    function createLockForOwner(
-        uint _value,
-        uint _lockDuration,
-        address _to
-    ) external returns (uint) {
+    function createLockForOwner(uint _value, uint _lockDuration, address _to) external returns (uint) {
         require(msg.sender == VeOwner, "!VeOwner");
         require(_value > 0, "zero value");
         // Lock time is rounded down to weeks
@@ -1117,13 +1089,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         isOwnerNFTID[_tokenId] = true;
         _mint(_to, _tokenId);
 
-        _depositForOwner(
-            _tokenId,
-            _value,
-            unlockTime,
-            locked[_tokenId],
-            DepositType.CREATE_LOCK_TYPE
-        );
+        _depositForOwner(_tokenId, _value, unlockTime, locked[_tokenId], DepositType.CREATE_LOCK_TYPE);
         return _tokenId;
     }
 }

@@ -10,9 +10,7 @@ contract BribeFactory is IBribeFactory {
 
     event BribeCreated(address value);
 
-    function createBribe(
-        address[] memory _allowedRewardTokens
-    ) external override returns (address) {
+    function createBribe(address[] memory _allowedRewardTokens) external override returns (address) {
         address _lastGauge = address(new Bribe(msg.sender, _allowedRewardTokens));
         lastGauge = _lastGauge;
         emit BribeCreated(_lastGauge);

@@ -28,13 +28,7 @@ contract Gauge is IGauge, MultiRewardsPoolBase {
     event VeTokenLocked(address indexed account, uint tokenId);
     event VeTokenUnlocked(address indexed account, uint tokenId);
 
-    constructor(
-        address _stake,
-        address _bribe,
-        address _ve,
-        address _voter,
-        address[] memory _allowedRewardTokens
-    ) MultiRewardsPoolBase(_stake, _voter, _allowedRewardTokens) {
+    constructor(address _stake, address _bribe, address _ve, address _voter, address[] memory _allowedRewardTokens) MultiRewardsPoolBase(_stake, _voter, _allowedRewardTokens) {
         bribe = _bribe;
         ve = _ve;
         voter = _voter;
@@ -101,7 +95,7 @@ contract Gauge is IGauge, MultiRewardsPoolBase {
         IVoter(voter).emitWithdraw(tokenId, msg.sender, amount);
     }
 
-    function withdrawToken(uint amount, uint tokenId) public {
+    function withdrawToken(uint amount, uint tokenId) internal {
         if (tokenId > 0) {
             _unlockVeToken(msg.sender, tokenId);
         }
@@ -130,9 +124,12 @@ contract Gauge is IGauge, MultiRewardsPoolBase {
 
     /// @dev Similar to Curve https://resources.curve.fi/reward-gauges/boosting-your-crv-rewards#formula
     function _derivedBalance(address account) internal view override returns (uint) {
-        uint _tokenId = tokenIds[account];
         uint _balance = balanceOf[account];
         uint _derived = (_balance * 40) / 100;
+        if (underlying != IVe(ve).token()) {
+            return _derived;
+        }
+        uint _tokenId = tokenIds[account];
         uint _adjusted = 0;
         uint _supply = IERC20(ve).totalSupply();
         if (account == IVe(ve).ownerOf(_tokenId) && _supply > 0) {

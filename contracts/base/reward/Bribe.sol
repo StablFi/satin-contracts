@@ -16,10 +16,7 @@ contract Bribe is IBribe, MultiRewardsPoolBase {
     address public immutable ve;
 
     // Assume that will be created from voter contract through factory
-    constructor(
-        address _voter,
-        address[] memory _allowedRewardTokens
-    ) MultiRewardsPoolBase(address(0), _voter, _allowedRewardTokens) {
+    constructor(address _voter, address[] memory _allowedRewardTokens) MultiRewardsPoolBase(address(0), _voter, _allowedRewardTokens) {
         voter = _voter;
         ve = IVoter(_voter).ve();
     }

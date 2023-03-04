@@ -45,35 +45,11 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
 
     // events replicated from SwapUtils to make the ABI easier for dumb
     // clients
-    event TokenSwap(
-        address indexed buyer,
-        uint256 tokensSold,
-        uint256 tokensBought,
-        uint128 soldId,
-        uint128 boughtId
-    );
-    event AddLiquidity(
-        address indexed provider,
-        uint256[] tokenAmounts,
-        uint256[] fees,
-        uint256 invariant,
-        uint256 lpTokenSupply
-    );
+    event TokenSwap(address indexed buyer, uint256 tokensSold, uint256 tokensBought, uint128 soldId, uint128 boughtId);
+    event AddLiquidity(address indexed provider, uint256[] tokenAmounts, uint256[] fees, uint256 invariant, uint256 lpTokenSupply);
     event RemoveLiquidity(address indexed provider, uint256[] tokenAmounts, uint256 lpTokenSupply);
-    event RemoveLiquidityOne(
-        address indexed provider,
-        uint256 lpTokenAmount,
-        uint256 lpTokenSupply,
-        uint256 boughtId,
-        uint256 tokensBought
-    );
-    event RemoveLiquidityImbalance(
-        address indexed provider,
-        uint256[] tokenAmounts,
-        uint256[] fees,
-        uint256 invariant,
-        uint256 lpTokenSupply
-    );
+    event RemoveLiquidityOne(address indexed provider, uint256 lpTokenAmount, uint256 lpTokenSupply, uint256 boughtId, uint256 tokensBought);
+    event RemoveLiquidityImbalance(address indexed provider, uint256[] tokenAmounts, uint256[] fees, uint256 invariant, uint256 lpTokenSupply);
     event NewAdminFee(uint256 newAdminFee);
     event NewSwapFee(uint256 newSwapFee);
     event NewWithdrawFee(uint256 newWithdrawFee);
@@ -104,7 +80,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256 _a,
         uint256 _fee,
         uint256 _adminFee
-    ) public payable virtual initializer {
+    ) public virtual initializer {
         __OwnerPausable_init();
         __ReentrancyGuard_init();
         // Check _pooledTokens and precisions parameter
@@ -117,16 +93,11 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         for (uint8 i = 0; i < _pooledTokens.length; i++) {
             if (i > 0) {
                 // Check if index is already used. Check if 0th element is a duplicate.
-                require(
-                    tokenIndexes[address(_pooledTokens[i])] == 0 &&
-                        _pooledTokens[0] != _pooledTokens[i],
-                    "Duplicate tokens"
-                );
+                require(tokenIndexes[address(_pooledTokens[i])] == 0 && _pooledTokens[0] != _pooledTokens[i], "Duplicate tokens");
             }
             require(address(_pooledTokens[i]) != address(0), "The 0 address isn't an ERC-20");
             require(decimals[i] <= SwapUtils.POOL_PRECISION_DECIMALS, "Token decimals exceeds max");
-            precisionMultipliers[i] =
-                10 ** uint256(SwapUtils.POOL_PRECISION_DECIMALS).sub(uint256(decimals[i]));
+            precisionMultipliers[i] = 10 ** uint256(SwapUtils.POOL_PRECISION_DECIMALS).sub(uint256(decimals[i]));
             tokenIndexes[address(_pooledTokens[i])] = i;
         }
 
@@ -243,11 +214,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * a fee on transfers, use the amount that gets transferred after the fee.
      * @return amount of tokens the user will receive
      */
-    function calculateSwap(
-        uint8 tokenIndexFrom,
-        uint8 tokenIndexTo,
-        uint256 dx
-    ) external view virtual returns (uint256) {
+    function calculateSwap(uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 dx) external view virtual returns (uint256) {
         return swapStorage.calculateSwap(tokenIndexFrom, tokenIndexTo, dx);
     }
 
@@ -266,10 +233,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param deposit whether this is a deposit or a withdrawal
      * @return token amount the user will receive
      */
-    function calculateTokenAmount(
-        uint256[] calldata amounts,
-        bool deposit
-    ) external view virtual returns (uint256) {
+    function calculateTokenAmount(uint256[] calldata amounts, bool deposit) external view virtual returns (uint256) {
         return swapStorage.calculateTokenAmount(amounts, deposit);
     }
 
@@ -279,9 +243,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param amount the amount of LP tokens that would be burned on withdrawal
      * @return array of token balances that the user will receive
      */
-    function calculateRemoveLiquidity(
-        uint256 amount
-    ) external view virtual returns (uint256[] memory) {
+    function calculateRemoveLiquidity(uint256 amount) external view virtual returns (uint256[] memory) {
         return swapStorage.calculateRemoveLiquidity(amount);
     }
 
@@ -293,10 +255,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @return availableTokenAmount calculated amount of underlying token
      * available to withdraw
      */
-    function calculateRemoveLiquidityOneToken(
-        uint256 tokenAmount,
-        uint8 tokenIndex
-    ) external view virtual returns (uint256 availableTokenAmount) {
+    function calculateRemoveLiquidityOneToken(uint256 tokenAmount, uint8 tokenIndex) external view virtual returns (uint256 availableTokenAmount) {
         return swapStorage.calculateWithdrawOneToken(tokenAmount, tokenIndex);
     }
 
@@ -325,15 +284,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256 dx,
         uint256 minDy,
         uint256 deadline
-    )
-        external
-        payable
-        virtual
-        nonReentrant
-        whenNotPaused
-        deadlineCheck(deadline)
-        returns (uint256)
-    {
+    ) external virtual nonReentrant whenNotPaused deadlineCheck(deadline) returns (uint256) {
         return swapStorage.swap(tokenIndexFrom, tokenIndexTo, dx, minDy);
     }
 
@@ -349,15 +300,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256[] calldata amounts,
         uint256 minToMint,
         uint256 deadline
-    )
-        external
-        payable
-        virtual
-        nonReentrant
-        whenNotPaused
-        deadlineCheck(deadline)
-        returns (uint256)
-    {
+    ) external virtual nonReentrant whenNotPaused deadlineCheck(deadline) returns (uint256) {
         return swapStorage.addLiquidity(amounts, minToMint);
     }
 
@@ -375,11 +318,11 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256 amount,
         uint256[] calldata minAmounts,
         uint256 deadline
-    ) external payable virtual nonReentrant deadlineCheck(deadline) returns (uint256[] memory) {
+    ) external virtual nonReentrant deadlineCheck(deadline) returns (uint256[] memory) {
         return swapStorage.removeLiquidity(amount, minAmounts);
     }
 
-    function skim(address _to) external payable virtual nonReentrant whenNotPaused {
+    function skim(address _to) external virtual nonReentrant whenNotPaused {
         return swapStorage.skim(_to);
     }
 
@@ -397,15 +340,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint8 tokenIndex,
         uint256 minAmount,
         uint256 deadline
-    )
-        external
-        payable
-        virtual
-        nonReentrant
-        whenNotPaused
-        deadlineCheck(deadline)
-        returns (uint256)
-    {
+    ) external virtual nonReentrant whenNotPaused deadlineCheck(deadline) returns (uint256) {
         return swapStorage.removeLiquidityOneToken(tokenAmount, tokenIndex, minAmount);
     }
 
@@ -423,15 +358,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
         uint256[] calldata amounts,
         uint256 maxBurnAmount,
         uint256 deadline
-    )
-        external
-        payable
-        virtual
-        nonReentrant
-        whenNotPaused
-        deadlineCheck(deadline)
-        returns (uint256)
-    {
+    ) external virtual nonReentrant whenNotPaused deadlineCheck(deadline) returns (uint256) {
         return swapStorage.removeLiquidityImbalance(amounts, maxBurnAmount);
     }
 
@@ -440,7 +367,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /**
      * @notice Withdraw all admin fees to the contract owner
      */
-    function withdrawAdminFees() external payable virtual onlyOwner {
+    function withdrawAdminFees() external virtual onlyOwner {
         swapStorage.withdrawAdminFees(owner());
     }
 
@@ -448,7 +375,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @notice Update the admin fee. Admin fee takes portion of the swap fee.
      * @param newAdminFee new admin fee to be applied on future transactions
      */
-    function setAdminFee(uint256 newAdminFee) external payable onlyOwner {
+    function setAdminFee(uint256 newAdminFee) external onlyOwner {
         swapStorage.setAdminFee(newAdminFee);
     }
 
@@ -456,7 +383,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @notice Update the swap fee to be applied on swaps
      * @param newSwapFee new swap fee to be applied on future transactions
      */
-    function setSwapFee(uint256 newSwapFee) external payable onlyOwner {
+    function setSwapFee(uint256 newSwapFee) external onlyOwner {
         swapStorage.setSwapFee(newSwapFee);
     }
 
@@ -467,14 +394,14 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param futureA the new A to ramp towards
      * @param futureTime timestamp when the new A should be reached
      */
-    function rampA(uint256 futureA, uint256 futureTime) external payable onlyOwner {
+    function rampA(uint256 futureA, uint256 futureTime) external onlyOwner {
         swapStorage.rampA(futureA, futureTime);
     }
 
     /**
      * @notice Stop ramping A immediately. Reverts if ramp A is already stopped.
      */
-    function stopRampA() external payable onlyOwner {
+    function stopRampA() external onlyOwner {
         swapStorage.stopRampA();
     }
 }

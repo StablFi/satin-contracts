@@ -93,11 +93,7 @@ module.exports = {
       chainId: 137,
       accounts: [PRIVATE_KEY],
       // gasPrice: 150000000000,// in wei
-<<<<<<< HEAD
-      gasMultiplier: 1.25,
-=======
       // gasMultiplier: 1.2,
->>>>>>> c84408eadd707ccccc275a2a135b4c3b1bd8c6ff
       //      gas: 265073000000000
     },
     mumbaiPolygonTestnet: {

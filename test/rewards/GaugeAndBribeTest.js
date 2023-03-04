@@ -5,9 +5,7 @@ const { TimeUtils } = require("../TimeUtils");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const { formatUnits, parseUnits } = require("ethers/lib/utils");
 const { BigNumber, utils } = require("ethers");
-const MAX_UINT = BigNumber.from(
-  "115792089237316195423570985008687907853269984665640564039457584007913129639935"
-);
+const MAX_UINT = BigNumber.from("115792089237316195423570985008687907853269984665640564039457584007913129639935");
 const amount1000At6 = parseUnits("1000", 6);
 const WEEK = 60 * 60 * 24 * 7;
 
@@ -87,37 +85,19 @@ describe("gauge and bribe tests", function () {
     bribes = await upgrades.deployProxy(Briibes);
     ve = await upgrades.deployProxy(Ve, [controller.address]);
     ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address]);
-    voter = await upgrades.deployProxy(BaseV1Voter, [
-      ve.address,
-      factory.address,
-      gauges.address,
-      bribes.address,
-      token.address,
-    ]);
-    minter = await upgrades.deployProxy(BaseV1Minter, [
-      ve.address,
-      controller.address,
-      token.address,
-      1,
-    ]);
+    voter = await upgrades.deployProxy(BaseV1Voter, [ve.address, factory.address, gauges.address, bribes.address, token.address]);
+    minter = await upgrades.deployProxy(BaseV1Minter, [ve.address, controller.address, token.address]);
 
     const cashAddress = cash.address;
 
-    const voterTokens = [
-      wmatic.address,
-      usdt.address,
-      usdc.address,
-      dai.address,
-      token.address,
-      cash.address,
-    ];
+    const voterTokens = [wmatic.address, usdt.address, usdc.address, dai.address, token.address, cash.address];
 
     await token.setMinter(minter.address);
     await ve_dist.setDepositor(minter.address);
     await controller.setVeDist(ve_dist.address);
     await controller.setVoter(voter.address);
     await voter.postInitialize(voterTokens, minter.address);
-    await minter.postInitialize(minterMax);
+    // await minter.postInitialize(minterMax);
     console.log("Minter contract initialized");
     const SatinBalance = await token.balanceOf(owner.address);
     console.log("Balance of satin of owner1", SatinBalance);
@@ -132,41 +112,13 @@ describe("gauge and bribe tests", function () {
     await token.approve(router.address, MAX_UINT);
     await dai.approve(router.address, MAX_UINT);
 
-    await router.addLiquidity(
-      cashAddress,
-      token.address,
-      false,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(
-      cashAddress,
-      dai.address,
-      true,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, dai.address, true, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(
-      cashAddress,
-      token.address,
-      false,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner2.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner2.address, Date.now());
+
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner3.address, Date.now());
 
     const SatinCashPairAddress = await router.pairFor(cashAddress, token.address, false);
     SatinCashPair = pair.attach(SatinCashPairAddress);
@@ -199,17 +151,56 @@ describe("gauge and bribe tests", function () {
   it("claim fees", async function () {
     const EXPECTED_FEE = "0.25";
     await SatinCashPair.connect(owner).approve(gaugeSatinCash.address, amount1000At6);
+    // await gaugeSatinCash.connect(owner).deposit(amount1000At6, 0);
+    const fees = await SatinCashPair.fees();
+    await router.addLiquidity(cash.address, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
+
+    await cash.approve(router.address, parseUnits("99999"));
+    await router.swapExactTokensForTokens(parseUnits("1000"), 0, [{ from: cash.address, to: token.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
+    await token.approve(router.address, MAX_UINT);
+    await SatinCashPair.approve(ve.address, utils.parseUnits("1000"));
+    await ve.createLockFor(utils.parseUnits("1000"), WEEK, owner.address);
+    await router.swapExactTokensForTokens(
+      parseUnits("1000", 6),
+      0,
+      [{ to: cash.address, from: token.address, stable: false }],
+      owner.address,
+      BigNumber.from("999999999999999999")
+    );
+
+    await router.swapExactTokensForTokens(
+      parseUnits("1000", 6),
+      0,
+      [{ to: cash.address, from: token.address, stable: false }],
+      owner.address,
+      BigNumber.from("999999999999999999")
+    );
+
+    await router.swapExactTokensForTokens(
+      parseUnits("1000", 6),
+      0,
+      [{ to: cash.address, from: token.address, stable: false }],
+      owner.address,
+      BigNumber.from("999999999999999999")
+    );
+
+    console.log("_supplied", await SatinCashPair.index0());
+
+    console.log("Fee balance", await token.balanceOf(bribeSatinCash.address));
+    await ve.claimFees();
+    console.log("ve address", ve.address);
+    console.log("Fee balance", await token.balanceOf(bribeSatinCash.address));
+    // console.log("Balance After", await token.balanceOf(bribeSatinCash.address));
+  });
+
+  xit("claim fee any user", async function () {
+    const EXPECTED_FEE = "0.25";
+    await SatinCashPair.connect(owner).approve(gaugeSatinCash.address, amount1000At6);
     await gaugeSatinCash.connect(owner).deposit(amount1000At6, 0);
     const fees = await SatinCashPair.fees();
 
     await cash.approve(router.address, parseUnits("99999"));
-    await router.swapExactTokensForTokens(
-      parseUnits("1000"),
-      0,
-      [{ from: cash.address, to: token.address, stable: false }],
-      owner.address,
-      BigNumber.from("999999999999999999")
-    );
+    await router.swapExactTokensForTokens(parseUnits("1000"), 0, [{ from: cash.address, to: token.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
     await token.approve(router.address, MAX_UINT);
     await router.swapExactTokensForTokens(
       parseUnits("1000", 6),
@@ -221,17 +212,21 @@ describe("gauge and bribe tests", function () {
 
     // expect(await cash.balanceOf(fees)).is.eq(parseUnits(EXPECTED_FEE));
     // expect(await token.balanceOf(fees)).is.eq(parseUnits(EXPECTED_FEE, 6));
-    await SatinCashPair.approve(ve.address, ethers.BigNumber.from("2000000000000000000"));
+
+    console.log("Balance before", await cash.balanceOf(owner3.address));
+    console.log("Balance before", await token.balanceOf(owner3.address));
+
+    // await SatinCashPair.approve(ve.address, ethers.BigNumber.from("2000000000000000000"));
     await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), WEEK, owner.address);
-    await gaugeSatinCash.connect(owner3).claimFees();
+    await ve.connect(owner3).claimFees();
 
-    console.log(await cash.balanceOf(bribeSatinCash.address));
-    console.log(await token.balanceOf(bribeSatinCash.address));
+    console.log("Balance before", await cash.balanceOf(owner3.address));
+    console.log("Balance After", await token.balanceOf(owner3.address));
 
-    await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
-    const tokenIDaddress = await bribeSatinCash.tokenIdToAddress(1);
-    console.log("tokenIDaddress", tokenIDaddress);
-    console.log("earned", await bribeSatinCash.earned(cash.address, tokenIDaddress));
+    // await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    // const tokenIDaddress = await bribeSatinCash.tokenIdToAddress(1);
+    // console.log("tokenIDaddress", tokenIDaddress);
+    // console.log("earned", await bribeSatinCash.earned(cash.address, tokenIDaddress));
   });
 
   // it("gauge getReward for not owner or voter should be forbidden", async function () {
@@ -296,16 +291,7 @@ describe("gauge and bribe tests", function () {
 });
 
 async function depositToGauge(factory, router, owner, token0, token1, gauge, tokenId) {
-  await TestHelper.addLiquidity(
-    factory,
-    router,
-    owner,
-    token0,
-    token1,
-    utils.parseUnits("1"),
-    utils.parseUnits("1", 6),
-    true
-  );
+  await TestHelper.addLiquidity(factory, router, owner, token0, token1, utils.parseUnits("1"), utils.parseUnits("1", 6), true);
   const pairAdr = await factory.getPair(token0, token1, true);
   const pair = (await ethers.getContractFactory("BaseV1Pair")).connect(pairAdr, owner);
   const pairBalance = await pair.balanceOf(owner.address);

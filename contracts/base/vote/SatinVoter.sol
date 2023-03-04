@@ -12,6 +12,7 @@ import "../../interface/IPair.sol";
 import "../../interface/IBribeFactory.sol";
 import "../../interface/IGaugeFactory.sol";
 import "../../interface/IMinter.sol";
+import "../../interface/IVeDist.sol";
 import "../../interface/IBribe.sol";
 import "../../interface/IMultiRewardsPool.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
@@ -25,6 +26,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     address public override ve;
     /// @dev SatinFactory
     address public factory;
+    address public veDist;
     address public token;
     address public gaugeFactory;
     address public bribeFactory;
@@ -32,8 +34,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     uint internal constant DURATION = 7 days;
     address public minter;
     address public owner;
-    /// @dev 4pool gauge address
-    address public FOUR_POOL_GAUGE_ADDRESS;
+    address internal SATIN_CASH_LP_GAUGE;
 
     /// @dev Total voting weight
     uint public totalWeight;
@@ -56,18 +57,16 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     mapping(uint => uint) public usedWeights;
     mapping(address => bool) public isGauge;
     mapping(address => bool) public isWhitelisted;
+    mapping(address => bool) public is4poolGauge;
 
     uint public index;
-    bool public canPublicWhitelistGauge;
+    uint public veShare;
+    bool public onlyAdminCanVote;
     mapping(address => uint) public supplyIndex;
     mapping(address => uint) public claimable;
+    mapping(address => uint) public maxVotesForPool;
 
-    event GaugeCreated(
-        address indexed gauge,
-        address creator,
-        address indexed bribe,
-        address indexed pool
-    );
+    event GaugeCreated(address indexed gauge, address creator, address indexed bribe, address indexed pool);
     event Voted(address indexed voter, uint tokenId, int256 weight);
     event Abstained(uint tokenId, int256 weight);
     event Deposit(address indexed lp, address indexed gauge, uint tokenId, uint amount);
@@ -94,21 +93,17 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     //     owner = msg.sender;
     // }
 
-    function initialize(
-        address _ve,
-        address _factory,
-        address _gaugeFactory,
-        address _bribeFactory,
-        address _token
-    ) public initializer {
+    function initialize(address _ve, address _factory, address _gaugeFactory, address _bribeFactory, address _token, address _veDist) public initializer {
+        __ReentrancyGuard_init_unchained();
         ve = _ve;
+        veDist = _veDist;
         factory = _factory;
         token = _token;
         gaugeFactory = _gaugeFactory;
         bribeFactory = _bribeFactory;
         minter = msg.sender;
         owner = msg.sender;
-        canPublicWhitelistGauge = true;
+        onlyAdminCanVote = true;
     }
 
     function postInitialize(address[] memory _tokens, address _minter) external {
@@ -117,17 +112,18 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
             _whitelist(_tokens[i]);
         }
         minter = _minter;
+        maxVotesForPool[IVe(ve).token()] = 20;
     }
 
-    /// @dev Amount of tokens required to be hold for whitelisting.
-    function listingFee() external view returns (uint) {
-        return _listingFee();
-    }
+    // /// @dev Amount of tokens required to be hold for whitelisting.
+    // function listingFee() external view returns (uint) {
+    //     return _listingFee();
+    // }
 
-    /// @dev 20% of circulation supply.
-    function _listingFee() internal view returns (uint) {
-        return (IERC20(IVe(ve).token()).totalSupply()) / 5;
-    }
+    // /// @dev 20% of circulation supply.
+    // function _listingFee() internal view returns (uint) {
+    //     return (IERC20(IVe(ve).token()).totalSupply()) / 5;
+    // }
 
     /// @dev Remove all votes for given tokenId.
     function reset(uint _tokenId) external {
@@ -189,43 +185,59 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
             address _pool = _poolVote[i];
             address _gauge = gauges[_pool];
 
-            int256 _poolWeight = (_weights[i] * _weight) / _totalVoteWeight;
-            require(votes[_tokenId][_pool] == 0, "duplicate pool");
-            require(_poolWeight != 0, "zero power");
-            _updateFor(_gauge);
-
-            poolVote[_tokenId].push(_pool);
-
-            weights[_pool] += _poolWeight;
-            votes[_tokenId][_pool] += _poolWeight;
-            if (_poolWeight > 0) {
-                IBribe(bribes[_gauge])._deposit(uint(_poolWeight), _tokenId);
-            } else {
-                _poolWeight = -_poolWeight;
+            if (isGauge[_gauge]) {
+                //<== CHECK IT'S A VALID GAUGE
+                int256 _poolWeight = (_weights[i] * _weight) / _totalVoteWeight;
+                require(votes[_tokenId][_pool] == 0, "duplicate pool");
+                require(_poolWeight != 0, "zero power");
+                _updateFor(_gauge);
+                poolVote[_tokenId].push(_pool);
+                weights[_pool] += _poolWeight;
+                uint _poolWeights;
+                if (weights[_pool] < 0) {
+                    _poolWeights = uint(-weights[_pool]);
+                } else {
+                    _poolWeights = uint(weights[_pool]);
+                }
+                require(_poolWeights <= _calculateMaxVotePossible(_pool), "Max votes exceeded");
+                votes[_tokenId][_pool] += _poolWeight;
+                if (_poolWeight > 0) {
+                    IBribe(bribes[_gauge])._deposit(uint(_poolWeight), _tokenId);
+                } else {
+                    _poolWeight = -_poolWeight;
+                }
+                _usedWeight += _poolWeight;
+                _totalWeight += _poolWeight;
+                emit Voted(msg.sender, _tokenId, _poolWeight);
             }
-            _usedWeight += _poolWeight;
-            _totalWeight += _poolWeight;
-            emit Voted(msg.sender, _tokenId, _poolWeight);
         }
         if (_usedWeight > 0) IVe(ve).voting(_tokenId);
         totalWeight += uint(_totalWeight);
         usedWeights[_tokenId] = uint(_usedWeight);
     }
 
+    function _calculateMaxVotePossible(address _pool) internal view returns (uint) {
+        uint totalVotingPower = IVe(ve).getTotalVotingPower();
+        return ((totalVotingPower * maxVotesForPool[_pool]) / 100);
+    }
+
     /// @dev Vote for given pools using a vote power of given tokenId. Reset previous votes.
     function vote(uint tokenId, address[] calldata _poolVote, int256[] calldata _weights) external {
         require(IVe(ve).isApprovedOrOwner(msg.sender, tokenId), "!owner");
         require(_poolVote.length == _weights.length, "!arrays");
+        require(!onlyAdminCanVote || IVe(ve).isOwnerNFTID(tokenId), "Paused");
         _vote(tokenId, _poolVote, _weights);
     }
 
     /// @dev Add token to whitelist. Only pools with whitelisted tokens can be added to gauge.
-    function whitelist(address _token, uint _tokenId) external {
-        require(canPublicWhitelistGauge || msg.sender == owner, "Paused");
-        require(_tokenId > 0, "!token");
-        require(msg.sender == IVe(ve).ownerOf(_tokenId), "!owner");
-        require(IVe(ve).balanceOfNFT(_tokenId) > _listingFee(), "!power");
+    function whitelist(address _token) external {
+        require(msg.sender == owner, "!VoterOwner");
         _whitelist(_token);
+    }
+
+    function removeWhitelist(address _token) external {
+        require(msg.sender == owner, "!owner");
+        isWhitelisted[_token] = false;
     }
 
     function _whitelist(address _token) internal {
@@ -235,36 +247,27 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @dev Add a token to a gauge/bribe as possible reward.
-    function registerRewardToken(address _token, address _gaugeOrBribe, uint _tokenId) external {
-        require(_tokenId > 0, "!token");
-        require(msg.sender == IVe(ve).ownerOf(_tokenId), "!owner");
-        require(IVe(ve).balanceOfNFT(_tokenId) > _listingFee(), "!power");
+    function registerRewardToken(address _token, address _gaugeOrBribe) external {
+        require(msg.sender == owner, "!VoterOwner");
+        // require(_tokenId > 0, "!token");
+        // require(msg.sender == IVe(ve).ownerOf(_tokenId), "!owner");
+        // require(IVe(ve).balanceOfNFT(_tokenId) > _listingFee(), "!power");
         IMultiRewardsPool(_gaugeOrBribe).registerRewardToken(_token);
     }
 
     /// @dev Remove a token from a gauge/bribe allowed rewards list.
-    function removeRewardToken(address _token, address _gaugeOrBribe, uint _tokenId) external {
-        require(_tokenId > 0, "!token");
-        require(msg.sender == IVe(ve).ownerOf(_tokenId), "!owner");
-        require(IVe(ve).balanceOfNFT(_tokenId) > _listingFee(), "!power");
+    function removeRewardToken(address _token, address _gaugeOrBribe) external {
+        require(msg.sender == owner, "!VoterOwner");
+        // require(_tokenId > 0, "!token");
+        // require(msg.sender == IVe(ve).ownerOf(_tokenId), "!owner");
+        // require(IVe(ve).balanceOfNFT(_tokenId) > _listingFee(), "!power");
         IMultiRewardsPool(_gaugeOrBribe).removeRewardToken(_token);
     }
 
-    function createGauge4pool(
-        address _4pool,
-        address _dai,
-        address _usdc,
-        address _usdt,
-        address _cash
-    ) external returns (address) {
+    function createGauge4pool(address _4pool, address _dai, address _usdc, address _usdt, address _cash) external returns (address) {
+        require(msg.sender == owner, "!VoterOwner");
         require(gauges[_4pool] == address(0x0), "exists");
-        require(
-            isWhitelisted[_dai] &&
-                isWhitelisted[_usdc] &&
-                isWhitelisted[_usdt] &&
-                isWhitelisted[_cash],
-            "!whitelisted"
-        );
+        require(isWhitelisted[_dai] && isWhitelisted[_usdc] && isWhitelisted[_usdt] && isWhitelisted[_cash], "!whitelisted");
         address[] memory allowedRewards;
         allowedRewards = new address[](5);
         allowedRewards[0] = _dai;
@@ -274,13 +277,8 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         allowedRewards[4] = token;
 
         address _bribe = IBribeFactory(bribeFactory).createBribe(allowedRewards);
-        address _gauge = IGaugeFactory(gaugeFactory).createGauge(
-            _4pool,
-            _bribe,
-            ve,
-            allowedRewards
-        );
-        FOUR_POOL_GAUGE_ADDRESS = _gauge;
+        address _gauge = IGaugeFactory(gaugeFactory).createGauge(_4pool, _bribe, ve, allowedRewards);
+        is4poolGauge[_gauge] = true;
 
         IERC20(token).safeIncreaseAllowance(_gauge, type(uint).max);
         bribes[_gauge] = _bribe;
@@ -310,6 +308,9 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         address _bribe = IBribeFactory(bribeFactory).createBribe(allowedRewards);
         address _gauge = IGaugeFactory(gaugeFactory).createGauge(_pool, _bribe, ve, allowedRewards);
         IERC20(token).safeIncreaseAllowance(_gauge, type(uint).max);
+        if (IVe(ve).token() == _pool) {
+            SATIN_CASH_LP_GAUGE = _gauge;
+        }
         bribes[_gauge] = _bribe;
         gauges[_pool] = _gauge;
         poolForGauge[_gauge] = _pool;
@@ -395,9 +396,9 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         _updateFor(_gauge);
     }
 
-    function setCanPublicWhitelistGauge(bool _canWhitelist) external {
+    function setOnlyAdminCanVote(bool _onlyAdminCanVote) external {
         require(msg.sender == owner, "!owner");
-        canPublicWhitelistGauge = _canWhitelist;
+        onlyAdminCanVote = _onlyAdminCanVote;
     }
 
     function _updateFor(address _gauge) internal {
@@ -430,11 +431,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @dev Batch claim rewards from given bribe contracts for given tokenId.
-    function claimBribes(
-        address[] memory _bribes,
-        address[][] memory _tokens,
-        uint _tokenId
-    ) external {
+    function claimBribes(address[] memory _bribes, address[][] memory _tokens, uint _tokenId) external {
         require(IVe(ve).isApprovedOrOwner(msg.sender, _tokenId), "!owner");
         for (uint i = 0; i < _bribes.length; i++) {
             IBribe(_bribes[i]).getRewardForOwner(_tokenId, _tokens[i]);
@@ -442,11 +439,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @dev Claim fees from given bribes.
-    function claimFees(
-        address[] memory _bribes,
-        address[][] memory _tokens,
-        uint _tokenId
-    ) external {
+    function claimFees(address[] memory _bribes, address[][] memory _tokens, uint _tokenId) external {
         require(IVe(ve).isApprovedOrOwner(msg.sender, _tokenId), "!owner");
         for (uint i = 0; i < _bribes.length; i++) {
             IBribe(_bribes[i]).getRewardForOwner(_tokenId, _tokens[i]);
@@ -465,23 +458,34 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         _distribute(_gauge);
     }
 
+    function getVeShare() external override {
+        require(msg.sender == veDist);
+        uint _veShare = veShare;
+        veShare = 0;
+        IERC20(token).safeTransfer(msg.sender, _veShare);
+    }
+
     function _distribute(address _gauge) internal nonReentrant {
         IMinter(minter).updatePeriod();
         _updateFor(_gauge);
         uint _claimable = claimable[_gauge];
+        if (SATIN_CASH_LP_GAUGE == _gauge) {
+            veShare = calculateSatinCashLPVeShare(_claimable);
+            _claimable -= veShare;
+        }
         if (_claimable > IMultiRewardsPool(_gauge).left(token) && _claimable / DURATION > 0) {
             claimable[_gauge] = 0;
-            if (!(_gauge == FOUR_POOL_GAUGE_ADDRESS)) {
-                IGauge(_gauge).notifyRewardAmount(token, _claimable, false);
-            } else {
+            if (is4poolGauge[_gauge]) {
                 IGauge(_gauge).notifyRewardAmount(token, _claimable, true);
+            } else {
+                IGauge(_gauge).notifyRewardAmount(token, _claimable, false);
             }
             emit DistributeReward(msg.sender, _gauge, _claimable);
         }
     }
 
     /// @dev Distribute rewards for all pools.
-    function distributeAll() external {
+    function distributeAll() external override {
         uint length = pools.length;
         for (uint x; x < length; x++) {
             _distribute(gauges[pools[x]]);
@@ -498,5 +502,17 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         for (uint x = 0; x < _gauges.length; x++) {
             _distribute(_gauges[x]);
         }
+    }
+
+    function calculateSatinCashLPVeShare(uint _claimable) public view returns (uint) {
+        address satinCashLPtoken = IVe(ve).token();
+        uint _veShare = IERC20(satinCashLPtoken).balanceOf(ve);
+        uint totalSupply = IERC20(satinCashLPtoken).totalSupply();
+        return (_claimable * _veShare) / totalSupply;
+    }
+
+    function setMaxVotesForPool(address _pool, uint _maxAmountInPercentage) external {
+        require(msg.sender == owner, "!owner");
+        maxVotesForPool[_pool] = _maxAmountInPercentage;
     }
 }

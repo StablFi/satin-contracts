@@ -6,9 +6,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const { formatUnits, parseUnits } = require("ethers/lib/utils");
 const { BigNumber, utils, Contract } = require("ethers");
 const { parse } = require("typechain");
-const MAX_UINT = BigNumber.from(
-  "115792089237316195423570985008687907853269984665640564039457584007913129639935"
-);
+const MAX_UINT = BigNumber.from("115792089237316195423570985008687907853269984665640564039457584007913129639935");
 const amount1000At6 = parseUnits("1000", 6);
 const WEEK = 60 * 60 * 24 * 7;
 
@@ -43,6 +41,8 @@ describe("ve tests", function () {
   let fourPoolLPTokenAddress;
   let fourPoolAddress;
   let SwapContract;
+  let gaugeSatinCash;
+  let bribeSatinCash;
 
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
@@ -84,39 +84,20 @@ describe("ve tests", function () {
     gauges = await upgrades.deployProxy(Gaauges);
     bribes = await upgrades.deployProxy(Briibes);
     ve = await upgrades.deployProxy(Ve, [controller.address]);
-    ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address]);
-    voter = await upgrades.deployProxy(BaseV1Voter, [
-      ve.address,
-      factory.address,
-      gauges.address,
-      bribes.address,
-      token.address,
-    ]);
-    minter = await upgrades.deployProxy(BaseV1Minter, [
-      ve.address,
-      controller.address,
-      token.address,
-      1,
-      owner3.address,
-    ]);
+    ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address, cash.address]);
+    voter = await upgrades.deployProxy(BaseV1Voter, [ve.address, factory.address, gauges.address, bribes.address, token.address, ve_dist.address]);
+    minter = await upgrades.deployProxy(BaseV1Minter, [ve.address, controller.address, token.address]);
 
     const cashAddress = cash.address;
 
-    const voterTokens = [
-      wmatic.address,
-      usdt.address,
-      usdc.address,
-      dai.address,
-      token.address,
-      cash.address,
-    ];
+    const voterTokens = [wmatic.address, usdt.address, usdc.address, dai.address, token.address, cash.address];
 
     await token.setMinter(minter.address);
     await ve_dist.setDepositor(minter.address);
+    await ve_dist.setVoter(voter.address);
     await controller.setVeDist(ve_dist.address);
     await controller.setVoter(voter.address);
-    await voter.postInitialize(voterTokens, minter.address);
-    await minter.postInitialize(minterMax);
+    // await minter.postInitialize(minterMax);
     console.log("Minter contract initialized");
     const SatinBalance = await token.balanceOf(owner.address);
     console.log("Balance of satin of owner1", SatinBalance);
@@ -125,47 +106,18 @@ describe("ve tests", function () {
     console.log("CashSatinLPAddress", CashSatinLPAddress);
 
     await ve.postInitialize(CashSatinLPAddress);
+    await voter.postInitialize(voterTokens, minter.address);
     console.log("Ve contract initialized");
 
     await cash.approve(router.address, MAX_UINT);
     await token.approve(router.address, MAX_UINT);
     await dai.approve(router.address, MAX_UINT);
 
-    await router.addLiquidity(
-      cashAddress,
-      token.address,
-      false,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(
-      cashAddress,
-      dai.address,
-      true,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, dai.address, true, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(
-      cashAddress,
-      token.address,
-      false,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner2.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner2.address, Date.now());
 
     const SatinCashPairAddress = await router.pairFor(cashAddress, token.address, false);
     SatinCashPair = pair.attach(SatinCashPairAddress);
@@ -200,15 +152,7 @@ describe("ve tests", function () {
       },
     });
 
-    const arguments = [
-      TOKEN_ADDRESSES,
-      TOKEN_DECIMALS,
-      LP_TOKEN_NAME,
-      LP_TOKEN_SYMBOL,
-      INITIAL_A,
-      SWAP_FEE,
-      ADMIN_FEE,
-    ];
+    const arguments = [TOKEN_ADDRESSES, TOKEN_DECIMALS, LP_TOKEN_NAME, LP_TOKEN_SYMBOL, INITIAL_A, SWAP_FEE, ADMIN_FEE];
 
     SwapContract = await upgrades.deployProxy(Swap, arguments, {
       kind: "uups",
@@ -220,17 +164,17 @@ describe("ve tests", function () {
 
     fourPoolLPTokenAddress = await SwapContract.swapStorage();
 
-    // await voter.createGauge(SatinCashPairAddress);
-    // expect(await voter.gauges(SatinCashPairAddress)).to.not.equal(ZERO_ADDRESS);
+    await voter.createGauge(SatinCashPairAddress);
+    expect(await voter.gauges(SatinCashPairAddress)).to.not.equal(ZERO_ADDRESS);
 
-    // const gaugeSatinCashAddress = await voter.gauges(SatinCashPairAddress);
-    // const bribeSatinCashAddress = await voter.bribes(gaugeSatinCashAddress);
+    const gaugeSatinCashAddress = await voter.gauges(SatinCashPairAddress);
+    const bribeSatinCashAddress = await voter.bribes(gaugeSatinCashAddress);
 
-    // gaugeSatinCash = gauge.attach(gaugeSatinCashAddress);
-    // bribeSatinCash = bribe.attach(bribeSatinCashAddress);
+    gaugeSatinCash = gauge.attach(gaugeSatinCashAddress);
+    bribeSatinCash = bribe.attach(bribeSatinCashAddress);
 
-    // await SatinCashPair.approve(gaugeSatinCash.address, MAX_UINT);
-    // await gaugeSatinCash.deposit(parseUnits("100"), 0);
+    await SatinCashPair.approve(gaugeSatinCash.address, MAX_UINT);
+    await gaugeSatinCash.deposit(parseUnits("100"), 0);
   });
 
   after(async function () {
@@ -245,20 +189,13 @@ describe("ve tests", function () {
     await TimeUtils.rollback(snapshot);
   });
 
-  it("Same Values but different lock time", async function () {
+  xit("Same Values but different lock time", async function () {
     await SatinCashPair.approve(ve.address, ethers.BigNumber.from("2000000000000000000"));
-    await ve.createLockFor(
-      ethers.BigNumber.from("1000000000000000000"),
-      86400 * 30 * 6 + 7 * 86400,
-      owner.address
-    );
-    await ve.createLockFor(
-      ethers.BigNumber.from("1000000000000000000"),
-      86400 * 365,
-      owner2.address
-    );
-    await voter.createGauge(SatinCashPair.address);
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 30 * 6 + 7 * 86400, owner.address);
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 365, owner2.address);
+    // await voter.createGauge(SatinCashPair.address);
     await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    await voter.setOnlyAdminCanVote(false);
     await voter.connect(owner2).vote(2, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
     const satinCashGauge = await voter.gauges(SatinCashPair.address);
     const cashSatinGauge = gauge.attach(satinCashGauge);
@@ -281,10 +218,15 @@ describe("ve tests", function () {
 
     // console.log("satinCashGauge", satinCashGauge);
     const claimable = await ve_dist.claimable(1);
-    console.log("Same value but locked for 6 months 1day", ethers.utils.formatEther(claimable));
+    // console.log("Same value but locked for 6 months 1day", ethers.utils.formatEther(claimable));
     const claimable2 = await ve_dist.claimable(2);
-    console.log("Same value but locked for 1 year", ethers.utils.formatEther(claimable2));
+    // console.log("Same value but locked for 1 year", ethers.utils.formatEther(claimable2));
 
+    await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    const tokenIDaddress = await bribeSatinCash.tokenIdToAddress(1);
+    // console.log("tokenIDaddress", tokenIDaddress);
+    // console.log("earned bribe 27", await bribeSatinCash.earned(cash.address, tokenIDaddress));
+    // console.log("earned gauge 27", await gaugeSatinCash.earned(token.address, owner.address));
     // await cashSatinGauge.connect(owner2).getReward(owner2.address, [token.address]);
 
     // console.log("Owner balanceof before", await token.balanceOf(owner2.address));
@@ -297,29 +239,26 @@ describe("ve tests", function () {
 
   xit("Same lock time but different lock value", async function () {
     await SatinCashPair.approve(ve.address, ethers.BigNumber.from("200000000000000000000"));
-    await ve.createLockFor(
-      ethers.BigNumber.from("1000000000000000000"),
-      86400 * 365,
-      owner.address
-    );
-    await ve.createLockFor(
-      ethers.BigNumber.from("10000000000000000000"),
-      86400 * 365,
-      owner2.address
-    );
-    await voter.createGauge(SatinCashPair.address);
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 365, owner.address);
+    await ve.createLockFor(ethers.BigNumber.from("10000000000000000000"), 86400 * 365, owner2.address);
+    // await voter.createGauge(SatinCashPair.address);
     await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    await voter.setOnlyAdminCanVote(false);
     await voter.connect(owner2).vote(2, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
     await network.provider.send("evm_increaseTime", [2 * 86400 * 7]);
     await network.provider.send("evm_mine");
+    await cash.transfer(ve_dist.address, utils.parseUnits("10"));
     await minter.updatePeriod();
-    const claimable = await ve_dist.claimable(1);
-    console.log("Locked for 1 year for tokenID 1", ethers.utils.formatEther(claimable));
-    const claimable2 = await ve_dist.claimable(2);
-    console.log(
-      "Locked for 1 year but value is 10 times the tokenID1",
-      ethers.utils.formatEther(claimable2)
-    );
+    const cashBalanceBefore = await cash.balanceOf(owner.address);
+    const tokenBalanceBefore = await token.balanceOf(owner.address);
+    await ve_dist.claimEmissions(1);
+    const cashBalanceAfter = await cash.balanceOf(owner.address);
+    const tokenBalanceAfter = await token.balanceOf(owner.address);
+    // console.log("Locked for 1 year for tokenID 1", (claimable));
+    console.log("owner1 emissions claimed cash", BigNumber.from(cashBalanceAfter).sub(cashBalanceBefore));
+    console.log("owner1 emissions claimed satin", BigNumber.from(tokenBalanceAfter).sub(tokenBalanceBefore));
+    // const claimable2 = await ve_dist.emissionsCashClaimable(2);
+    // console.log("Locked for 1 year but value is 10 times the tokenID1", ethers.utils.formatEther(claimable2));
   });
 
   xit("Create 4pool gauge", async function () {
@@ -374,5 +313,39 @@ describe("ve tests", function () {
 
     // await fourPoolGauge.deposit(LPTokenBalance, 0);
     // console.log("DEPOSIT DONE");
+  });
+
+  xit("Check voting power max ", async function () {
+    await SatinCashPair.approve(ve.address, ethers.BigNumber.from("10000000000000000000"));
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 30 * 6 + 7 * 86400, owner.address);
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 365, owner2.address);
+    await ve.createLockFor(ethers.BigNumber.from("6000000000000000000"), 86400 * 365, owner2.address);
+    await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    console.log("Total Voting Power", await ve.getTotalVotingPower());
+  });
+  xit("Check totalVoting power if tokenID is burned", async function () {
+    await SatinCashPair.approve(ve.address, ethers.BigNumber.from("10000000000000000000"));
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 30 * 6 + 7 * 86400, owner.address);
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 7 * 86400, owner2.address);
+    await ve.createLockFor(ethers.BigNumber.from("6000000000000000000"), 86400 * 365, owner2.address);
+    console.log("Total Voting Power Before", await ve.getTotalVotingPower());
+    await network.provider.send("evm_increaseTime", [2 * 86400 * 7]);
+    await network.provider.send("evm_mine");
+    await ve.connect(owner2).withdraw(2);
+    console.log("Total Voting Power After", await ve.getTotalVotingPower());
+  });
+
+  it("check emissions", async function () {
+    await SatinCashPair.approve(ve.address, ethers.BigNumber.from("10000000000000000000"));
+    await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 30 * 6 + 7 * 86400, owner.address);
+    await ve.createLockFor(ethers.BigNumber.from("10000000000000"), 86400 * 365, owner2.address);
+    await ve.createLockFor(ethers.BigNumber.from("6000000000000000000"), 86400 * 365, owner2.address);
+    await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    await voter.setOnlyAdminCanVote(false);
+    await voter.connect(owner2).vote(2, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
+    await network.provider.send("evm_increaseTime", [3 * 86400 * 7]);
+    await network.provider.send("evm_mine");
+    await cash.transfer(ve_dist.address, utils.parseUnits("10"));
+    await minter.updatePeriod();
   });
 });

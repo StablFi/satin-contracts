@@ -59,14 +59,13 @@ contract SatinMinter is IMinter, Initializable {
     function initialize(
         address ve_, // the ve(3,3) system that will be locked into
         address controller_, // controller with veDist and voter addresses
-        address token_, //Satin token address
-        uint warmingUpPeriod // 2 by default
+        address token_ //Satin token address
     ) public initializer {
         owner = msg.sender;
         token = IUnderlying(token_);
         ve = IVe(ve_);
         controller = controller_;
-        activePeriod = ((block.timestamp + (warmingUpPeriod * _WEEK)) / _WEEK) * _WEEK;
+        activePeriod = (block.timestamp / _WEEK) * _WEEK;
         periodEmissionsEnd = ((block.timestamp + (491 * _WEEK)) / _WEEK) * _WEEK;
         WEEKLY_EMISSION = 315_000_000e18;
         growthDivider = 20;
@@ -106,26 +105,30 @@ contract SatinMinter is IMinter, Initializable {
         // only trigger if new week
         if (block.timestamp >= _period + _WEEK && block.timestamp <= periodEmissionsEnd) {
             _period = (block.timestamp / _WEEK) * _WEEK;
+            uint sinceLast = _period - activePeriod;
+            uint emissionsMultiplier = sinceLast / _WEEK;
             activePeriod = _period;
-            uint _weekly = WEEKLY_EMISSION;
-            WEEKLY_EMISSION =
-                (_weekly * _WEEKLY_EMISSION_DECREASE) /
-                _WEEKLY_EMISSION_DECREASE_DENOMINATOR;
+            uint _weekly = WEEKLY_EMISSION * emissionsMultiplier;
+            for (uint i = 1; i <= emissionsMultiplier; i++) {
+                WEEKLY_EMISSION = (WEEKLY_EMISSION * _WEEKLY_EMISSION_DECREASE) / _WEEKLY_EMISSION_DECREASE_DENOMINATOR;
+            }
             uint _growth = _calculateGrowth(_weekly);
-            uint _required = _growth + _weekly;
+            uint _required = _weekly;
             uint _balanceOf = token.balanceOf(address(this));
             if (_balanceOf < _required) {
                 token.mint(address(this), _required - _balanceOf);
             }
 
+            token.approve(address(_voter()), _weekly - _growth);
+            _voter().notifyRewardAmount(_weekly - _growth);
+            _voter().distributeAll();
+
             IERC20(address(token)).safeTransfer(address(_veDist()), _growth);
             // checkpoint token balance that was just minted in veDist
             _veDist().checkpointToken();
+            _veDist().checkpointEmissions();
             // checkpoint supply
             _veDist().checkpointTotalSupply();
-
-            token.approve(address(_voter()), _weekly);
-            _voter().notifyRewardAmount(_weekly);
 
             emit Mint(msg.sender, _weekly, _growth);
         }
