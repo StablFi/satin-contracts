@@ -7,7 +7,6 @@ import "./BaseV1Pair.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract BaseV1Factory is IFactory, Initializable {
-    bool public isPaused;
     address public pauser;
     address public pendingPauser;
     address public treasury;
@@ -20,18 +19,12 @@ contract BaseV1Factory is IFactory, Initializable {
     address internal lastToken0;
     address internal lastToken1;
     bool internal lastIsStable;
+    mapping(address => bool) public override paused;
 
-    event PairCreated(
-        address indexed token0,
-        address indexed token1,
-        bool stable,
-        address pair,
-        uint256
-    );
+    event PairCreated(address indexed token0, address indexed token1, bool stable, address pair, uint256);
 
     function initialize(address _treasury) public initializer {
         pauser = msg.sender;
-        isPaused = false;
         treasury = _treasury;
     }
 
@@ -49,9 +42,9 @@ contract BaseV1Factory is IFactory, Initializable {
         pauser = pendingPauser;
     }
 
-    function setPause(bool _state) external {
+    function setPause(address _pool, bool _state) external {
         require(msg.sender == pauser, "BaseV1: !P"); //NOT PAUSER
-        isPaused = _state;
+        paused[_pool] = _state;
     }
 
     function setSwapFee(address pair, uint256 value) external {
@@ -77,11 +70,7 @@ contract BaseV1Factory is IFactory, Initializable {
         return (lastToken0, lastToken1, lastIsStable);
     }
 
-    function createPair(
-        address tokenA,
-        address tokenB,
-        bool stable
-    ) external returns (address pair) {
+    function createPair(address tokenA, address tokenB, bool stable) external returns (address pair) {
         require(tokenA != tokenB, "BaseV1: IA"); // BaseV1: IDENTICAL_ADDRESSES
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(token0 != address(0), "BaseV1: ZA"); // BaseV1: ZERO_ADDRESS

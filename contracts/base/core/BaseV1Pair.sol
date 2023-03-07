@@ -422,7 +422,7 @@ contract BaseV1Pair is IERC20, IPair, ReentrancyGuard {
 
     // this low-level function should be called from a contract which performs important safety checks
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external override nonReentrant {
-        require(!IFactory(factory).isPaused());
+        require(!IFactory(factory).paused(address(this)), "Paused");
         require(amount0Out > 0 || amount1Out > 0, "BaseV1: IOA"); // BaseV1: INSUFFICIENT_OUTPUT_AMOUNT
         (uint256 _reserve0, uint256 _reserve1) = (reserve0, reserve1);
         require(amount0Out < _reserve0 && amount1Out < _reserve1, "BaseV1: IL"); // BaseV1: INSUFFICIENT_LIQUIDITY

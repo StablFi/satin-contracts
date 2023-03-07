@@ -89,12 +89,11 @@ module.exports = {
     //       chainId: 5,
     //     },
     polygon: {
-      url: "https://polygon-rpc.com/",
+      url: process.env.RPC,
       chainId: 137,
       accounts: [PRIVATE_KEY],
-      // gasPrice: 150000000000,// in wei
-      // gasMultiplier: 1.2,
-      //      gas: 265073000000000
+      gasPrice: 300e9, // in wei
+      gasMultiplier: 1.2,
     },
     mumbaiPolygonTestnet: {
       url: "https://matic-mumbai.chainstacklabs.com",
@@ -104,6 +103,10 @@ module.exports = {
     tenderly: {
       url: "https://rpc.tenderly.co/fork/10703085-2bad-4f77-b0c8-a4a41f8bada6",
       chainId: 137,
+      accounts: [PRIVATE_KEY],
+    },
+    stabl: {
+      url: "https://internal-rpc.stabl.fi",
       accounts: [PRIVATE_KEY],
     },
   },

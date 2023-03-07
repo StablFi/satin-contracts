@@ -108,9 +108,15 @@ contract SatinMinter is IMinter, Initializable {
             uint sinceLast = _period - activePeriod;
             uint emissionsMultiplier = sinceLast / _WEEK;
             activePeriod = _period;
-            uint _weekly = WEEKLY_EMISSION * emissionsMultiplier;
-            for (uint i = 1; i <= emissionsMultiplier; i++) {
-                WEEKLY_EMISSION = (WEEKLY_EMISSION * _WEEKLY_EMISSION_DECREASE) / _WEEKLY_EMISSION_DECREASE_DENOMINATOR;
+            uint _weekly;
+            if (emissionsMultiplier > 1) {
+                for (uint i = 1; i <= emissionsMultiplier; i++) {
+                    _weekly += WEEKLY_EMISSION;
+                    WEEKLY_EMISSION = (WEEKLY_EMISSION * _WEEKLY_EMISSION_DECREASE) / _WEEKLY_EMISSION_DECREASE_DENOMINATOR;
+                }
+            } else {
+                _weekly = WEEKLY_EMISSION;
+                WEEKLY_EMISSION = (_weekly * _WEEKLY_EMISSION_DECREASE) / _WEEKLY_EMISSION_DECREASE_DENOMINATOR;
             }
             uint _growth = _calculateGrowth(_weekly);
             uint _required = _weekly;

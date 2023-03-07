@@ -79,7 +79,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
     mapping(bytes4 => bool) internal supportedInterfaces;
 
     /// @dev Mapping of ownerNFTID => bool
-    mapping(uint => bool) internal isOwnerNFTID;
+    mapping(uint => bool) public override isOwnerNFTID;
 
     /// @dev ERC165 interface ID of ERC165
     bytes4 internal constant ERC165_INTERFACE_ID = 0x01ffc9a7;
@@ -661,7 +661,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         uint value0 = uint(int256(_locked0.amount));
         uint end = _locked0.end >= _locked1.end ? _locked0.end : _locked1.end;
 
-        require(end > block.timestamp, "expired"); //<== CHECK NOT EXPIRED
+        require(_locked0.end > block.timestamp && _locked1.end > block.timestamp, "expired"); //<== CHECK NOT EXPIRED
         supply -= value0; //<== ADJUST SUPPLY CORRECTLY
 
         IVeDist(_veDist()).claim(_from);

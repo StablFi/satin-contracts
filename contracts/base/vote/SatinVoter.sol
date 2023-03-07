@@ -103,7 +103,6 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         bribeFactory = _bribeFactory;
         minter = msg.sender;
         owner = msg.sender;
-        onlyAdminCanVote = true;
     }
 
     function postInitialize(address[] memory _tokens, address _minter) external {
@@ -199,7 +198,9 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
                 } else {
                     _poolWeights = uint(weights[_pool]);
                 }
-                require(_poolWeights <= _calculateMaxVotePossible(_pool), "Max votes exceeded");
+                if (maxVotesForPool[_pool] != 0) {
+                    require(_poolWeights <= _calculateMaxVotePossible(_pool), "Max votes exceeded");
+                }
                 votes[_tokenId][_pool] += _poolWeight;
                 if (_poolWeight > 0) {
                     IBribe(bribes[_gauge])._deposit(uint(_poolWeight), _tokenId);
@@ -244,6 +245,10 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         require(!isWhitelisted[_token], "already whitelisted");
         isWhitelisted[_token] = true;
         emit Whitelisted(msg.sender, _token);
+    }
+
+    function viewSatinCashLPGaugeAddress() external view returns (address) {
+        return SATIN_CASH_LP_GAUGE;
     }
 
     /// @dev Add a token to a gauge/bribe as possible reward.
