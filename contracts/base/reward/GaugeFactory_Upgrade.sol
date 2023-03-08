@@ -7,7 +7,7 @@ import "../helper/ProxyFactory.sol";
 import "./Gauge.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract GaugeFactory is Initializable, IGaugeFactory {
+contract GaugeFactory_Upgrade is Initializable, IGaugeFactory {
     address public lastGauge;
 
     address private gaugeImplementation;
@@ -27,5 +27,9 @@ contract GaugeFactory is Initializable, IGaugeFactory {
         lastGauge = _lastGauge;
         emit GaugeCreated(_lastGauge);
         return _lastGauge;
+    }
+
+    function newFunction() external pure returns (uint32) {
+        return 1234;
     }
 }

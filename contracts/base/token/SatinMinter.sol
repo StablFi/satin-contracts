@@ -3,20 +3,19 @@
 pragma solidity ^0.8.13;
 
 import "../../lib/Math.sol";
-import "../../lib/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "../../interface/IUnderlying.sol";
 import "../../interface/IVoter.sol";
 import "../../interface/IVe.sol";
 import "../../interface/IVeDist.sol";
 import "../../interface/IMinter.sol";
-import "../../interface/IERC20.sol";
 import "../../interface/IController.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /// @title Codifies the minting rules as per ve(3,3),
 ///        abstracted from the token to support any token that allows minting
 contract SatinMinter is IMinter, Initializable {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /// @dev Allows minting once per week (reset every Thursday 00:00 UTC)
     uint internal constant _WEEK = 86400 * 7;
@@ -68,7 +67,7 @@ contract SatinMinter is IMinter, Initializable {
         activePeriod = ((block.timestamp + _WEEK) / _WEEK) * _WEEK;
         periodEmissionsEnd = ((block.timestamp + (491 * _WEEK)) / _WEEK) * _WEEK;
         WEEKLY_EMISSION = 315_000_000e18;
-        growthDivider = 20;
+        growthDivider = 25;
     }
 
     // function postInitialize(uint totalAmount) external {
@@ -129,7 +128,7 @@ contract SatinMinter is IMinter, Initializable {
             _voter().notifyRewardAmount(_weekly - _growth);
             _voter().distribute(_voter().viewSatinCashLPGaugeAddress());
 
-            IERC20(address(token)).safeTransfer(address(_veDist()), _growth);
+            IERC20Upgradeable(address(token)).safeTransfer(address(_veDist()), _growth);
             // checkpoint token balance that was just minted in veDist
             _veDist().checkpointToken();
             _veDist().checkpointEmissions();

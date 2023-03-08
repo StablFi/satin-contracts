@@ -10,7 +10,7 @@ import "contracts/interface/IVe.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 // Bribes pay out rewards for a given pool based on the votes that were received from the user (goes hand in hand with Voter.vote())
-contract ExternalBribe is Initializable, IBribe {
+contract ExternalBribe_Upgrade is Initializable, IBribe {
     address public voter; // only voter can modify balances (since it only happens on vote())
     address public _ve; // 天使のたまご
 
@@ -335,5 +335,9 @@ contract ExternalBribe is Initializable, IBribe {
         require(token.code.length > 0);
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))));
+    }
+
+    function newFunction() external pure returns (uint32) {
+        return 1234;
     }
 }

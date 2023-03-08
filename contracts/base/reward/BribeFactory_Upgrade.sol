@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "hardhat/console.sol";
 
-contract BribeFactory is Initializable, IBribeFactory {
+contract BribeFactory_Upgrade is Initializable, IBribeFactory {
     address public last_internal_bribe;
     address public last_external_bribe;
 
@@ -36,5 +36,9 @@ contract BribeFactory is Initializable, IBribeFactory {
         bytes memory payload = abi.encodeWithSelector(ExternalBribe.initialize.selector, msg.sender, allowedRewards);
         last_external_bribe = ProxyFactory.createTransparentProxy(externalBribeImplementationAddress, proxyAdmin, payload, salt);
         return last_external_bribe;
+    }
+
+    function newFunction() external pure returns (uint32) {
+        return 1234;
     }
 }

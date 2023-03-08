@@ -7,7 +7,7 @@ import "../helper/ProxyFactory.sol";
 import "./BaseV1Pair.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract BaseV1Factory is Initializable, IFactory {
+contract BaseV1Factory_Upgrade is Initializable, IFactory {
     address public pauser;
     address public pendingPauser;
     address public treasury;
@@ -82,5 +82,9 @@ contract BaseV1Factory is Initializable, IFactory {
         allPairs.push(pair);
         isPair[pair] = true;
         emit PairCreated(token0, token1, stable, pair, allPairs.length);
+    }
+
+    function newFunction() external pure returns (uint32) {
+        return 1234;
     }
 }

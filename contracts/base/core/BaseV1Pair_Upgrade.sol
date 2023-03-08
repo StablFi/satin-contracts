@@ -13,7 +13,7 @@ import "../../lib/SatinLibrary.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-contract BaseV1Pair is Initializable, ReentrancyGuardUpgradeable, IERC20, IPair {
+contract BaseV1Pair_Upgrade is Initializable, ReentrancyGuardUpgradeable, IERC20, IPair {
     using SafeERC20 for IERC20;
 
     string public name;
@@ -622,5 +622,9 @@ contract BaseV1Pair is Initializable, ReentrancyGuardUpgradeable, IERC20, IPair 
         balanceOf[dst] += amount;
 
         emit Transfer(src, dst, amount);
+    }
+
+    function newFunction() external pure returns (uint32) {
+        return 1234;
     }
 }

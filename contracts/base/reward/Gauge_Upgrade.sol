@@ -13,7 +13,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 /// @title Gauges are used to incentivize pools, they emit reward tokens over 7 days for staked LP tokens
-contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
+contract Gauge_Upgrade is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
     using SafeERC20 for IERC20;
 
     /// @dev The ve token used for gauges
@@ -150,5 +150,9 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
             _claimFees();
         }
         _notifyRewardAmount(token, amount);
+    }
+
+    function newFunction() external pure returns (uint32) {
+        return 1234;
     }
 }

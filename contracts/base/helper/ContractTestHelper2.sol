@@ -6,7 +6,7 @@ pragma solidity ^0.8.13;
 import "../vote/Ve.sol";
 
 contract ContractTestHelper2 is IERC721Receiver {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     function onERC721Received(
         address,

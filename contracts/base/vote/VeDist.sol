@@ -3,15 +3,14 @@
 pragma solidity ^0.8.13;
 
 import "../../lib/Math.sol";
-import "../../interface/IERC20.sol";
 import "../../interface/IVeDist.sol";
 import "../../interface/IVe.sol";
 import "../../interface/IVoter.sol";
-import "../../lib/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract VeDist is IVeDist, Initializable {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     event CheckpointToken(uint time, uint tokens);
 
@@ -72,7 +71,7 @@ contract VeDist is IVeDist, Initializable {
     // token = _token;
     // votingEscrow = _votingEscrow;
     // depositor = msg.sender;
-    // IERC20(_token).safeIncreaseAllowance(_votingEscrow, type(uint).max);
+    // IERC20Upgradeable(_token).safeIncreaseAllowance(_votingEscrow, type(uint).max);
     // }
 
     function initialize(address _votingEscrow, address token_, address _cash) public initializer {
@@ -88,7 +87,7 @@ contract VeDist is IVeDist, Initializable {
         depositor = msg.sender;
         owner = msg.sender;
         minLockDurationForReward = 6 * 30 * 86400;
-        IERC20(_token).safeIncreaseAllowance(_votingEscrow, type(uint).max);
+        IERC20Upgradeable(_token).safeIncreaseAllowance(_votingEscrow, type(uint).max);
     }
 
     function setVoter(address _voter) external {
@@ -107,8 +106,8 @@ contract VeDist is IVeDist, Initializable {
 
     function _checkpointEmissions() internal {
         IVoter(voter).getVeShare();
-        uint cashBalance = IERC20(cash).balanceOf(address(this));
-        uint tokenBalance = IERC20(token).balanceOf(address(this));
+        uint cashBalance = IERC20Upgradeable(cash).balanceOf(address(this));
+        uint tokenBalance = IERC20Upgradeable(token).balanceOf(address(this));
         uint tokenToDistribute = tokenBalance - tokenLastBalance;
         uint cashToDistribute = cashBalance - cashLastBalance;
         tokenLastBalance = tokenBalance;
@@ -136,7 +135,7 @@ contract VeDist is IVeDist, Initializable {
     }
 
     function _checkpointToken() internal {
-        uint tokenBalance = IERC20(token).balanceOf(address(this));
+        uint tokenBalance = IERC20Upgradeable(token).balanceOf(address(this));
         uint toDistribute = tokenBalance - tokenLastBalance;
         tokenLastBalance = tokenBalance;
 
@@ -432,7 +431,7 @@ contract VeDist is IVeDist, Initializable {
         _lastTokenTime = (_lastTokenTime / WEEK) * WEEK;
         uint amount = _claim(_tokenId, votingEscrow, _lastTokenTime);
         if (amount != 0) {
-            IERC20(token).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), amount);
+            IERC20Upgradeable(token).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), amount);
             tokenLastBalance -= amount;
         }
         return amount;
@@ -445,11 +444,11 @@ contract VeDist is IVeDist, Initializable {
         (uint cashAmount, uint tokenAmount) = _claimEmissions(_tokenId, votingEscrow, _lastEmissionsTime);
 
         if (cashAmount != 0) {
-            IERC20(cash).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), cashAmount);
+            IERC20Upgradeable(cash).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), cashAmount);
             cashLastBalance -= cashAmount;
         }
         if (tokenAmount != 0) {
-            IERC20(token).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), tokenAmount);
+            IERC20Upgradeable(token).safeTransfer(IVe(votingEscrow).ownerOf(_tokenId), tokenAmount);
             tokenLastBalance -= tokenAmount;
         }
         return (cashAmount, tokenAmount);
@@ -467,7 +466,7 @@ contract VeDist is IVeDist, Initializable {
             if (_tokenId == 0) break;
             uint amount = _claim(_tokenId, _votingEscrow, _lastTokenTime);
             if (amount != 0) {
-                IERC20(token).safeTransfer(IVe(_votingEscrow).ownerOf(_tokenId), amount);
+                IERC20Upgradeable(token).safeTransfer(IVe(_votingEscrow).ownerOf(_tokenId), amount);
                 total += amount;
             }
         }

@@ -3,7 +3,6 @@
 pragma solidity ^0.8.13;
 
 import "../../lib/Base64.sol";
-import "../../interface/IERC20.sol";
 import "../../interface/IERC721.sol";
 import "../../interface/IERC721Metadata.sol";
 import "../../interface/IVe.sol";
@@ -11,16 +10,16 @@ import "../../interface/IVeDist.sol";
 import "../../interface/IERC721Receiver.sol";
 import "../../interface/IController.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import "../../lib/SafeERC20.sol";
 import "../../interface/IPair.sol";
 import "../../interface/IMultiRewardsPool.sol";
 import "../../interface/IBribe.sol";
 import "../../interface/IVoter.sol";
 import "../../lib/Math.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgradeable {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     uint internal constant WEEK = 1 weeks;
     uint internal constant MAX_TIME = 365 * 86400;
@@ -586,7 +585,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
 
         address from = msg.sender;
         if (_value != 0 && depositType != DepositType.MERGE_TYPE) {
-            IERC20(token).safeTransferFrom(from, address(this), _value);
+            IERC20Upgradeable(token).safeTransferFrom(from, address(this), _value);
         }
 
         emit Deposit(from, _tokenId, _value, _locked.end, depositType, block.timestamp);
@@ -621,7 +620,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
 
         address from = msg.sender;
         // if (_value != 0 && depositType != DepositType.MERGE_TYPE) {
-        //     IERC20(token).safeTransferFrom(from, address(this), _value);
+        //     IERC20Upgradeable(token).safeTransferFrom(from, address(this), _value);
         // }
 
         emit Deposit(from, _tokenId, _value, _locked.end, depositType, block.timestamp);
@@ -776,7 +775,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         // Both can have >= 0 amount
         _checkpoint(_tokenId, _locked, LockedBalance(0, 0));
 
-        IERC20(token).safeTransfer(msg.sender, value);
+        IERC20Upgradeable(token).safeTransfer(msg.sender, value);
 
         // Burn the NFT
         _burn(_tokenId);
@@ -810,16 +809,6 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
             }
         }
         return _min;
-    }
-
-    /// @notice Gets the total voting power.
-    /// @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
-    /// @return totalVotingPower total voting power
-    function getTotalVotingPower() external view override returns (uint totalVotingPower) {
-        totalVotingPower = 0;
-        for (uint i = 1; i <= tokenId; i++) {
-            totalVotingPower += _balanceOfNFT(i, block.timestamp);
-        }
     }
 
     /// @notice Get the current voting power for `_tokenId`
@@ -928,16 +917,16 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
             uint _fees0 = fees0 + claimed0;
             uint _fees1 = fees1 + claimed1;
             (address _token0, address _token1) = IPair(_underlying).tokens();
-            if (_fees0 > IMultiRewardsPool(bribe).left(_token0)) {
+            if (_fees0 > IMultiRewardsPool(bribe).left(_token0) && _fees0 / WEEK > 0) {
                 fees0 = 0;
-                IERC20(_token0).safeIncreaseAllowance(bribe, _fees0);
+                IERC20Upgradeable(_token0).safeIncreaseAllowance(bribe, _fees0);
                 IBribe(bribe).notifyRewardAmount(_token0, _fees0);
             } else {
                 fees0 = _fees0;
             }
-            if (_fees1 > IMultiRewardsPool(bribe).left(_token1)) {
+            if (_fees1 > IMultiRewardsPool(bribe).left(_token1) && _fees1 / WEEK > 0) {
                 fees1 = 0;
-                IERC20(_token1).safeIncreaseAllowance(bribe, _fees1);
+                IERC20Upgradeable(_token1).safeIncreaseAllowance(bribe, _fees1);
                 IBribe(bribe).notifyRewardAmount(_token1, _fees1);
             } else {
                 fees1 = _fees1;
@@ -981,7 +970,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         return _supplyAt(lastPoint, t);
     }
 
-    function totalSupply() external view returns (uint) {
+    function totalSupply() external view override returns (uint) {
         return totalSupplyAtT(block.timestamp);
     }
 

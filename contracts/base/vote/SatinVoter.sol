@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 
 import "../../interface/IVe.sol";
 import "../../interface/IVoter.sol";
-import "../../interface/IERC20.sol";
 import "../../interface/IERC721.sol";
 import "../../interface/IGauge.sol";
 import "../../interface/IFactory.sol";
@@ -16,11 +15,11 @@ import "../../interface/IVeDist.sol";
 import "../../interface/IBribe.sol";
 import "../../interface/IMultiRewardsPool.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import "../../lib/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /// @dev The ve token that governs these contracts
     address public override ve;
@@ -123,7 +122,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
 
     // /// @dev 20% of circulation supply.
     // function _listingFee() internal view returns (uint) {
-    //     return (IERC20(IVe(ve).token()).totalSupply()) / 5;
+    //     return (IERC20Upgradeable(IVe(ve).token()).totalSupply()) / 5;
     // }
 
     /// @dev Remove all votes for given tokenId.
@@ -223,7 +222,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     }
 
     function _calculateMaxVotePossible(address _pool) internal view returns (uint) {
-        uint totalVotingPower = IVe(ve).getTotalVotingPower();
+        uint totalVotingPower = IVe(ve).totalSupply();
         return ((totalVotingPower * maxVotesForPool[_pool]) / 100);
     }
 
@@ -302,7 +301,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         address _gauge = IGaugeFactory(gaugeFactory).createGauge(_4pool, _internal_bribe, _external_bribe, ve, allowedRewards);
         is4poolGauge[_gauge] = true;
 
-        IERC20(token).safeIncreaseAllowance(_gauge, type(uint).max);
+        IERC20Upgradeable(token).safeIncreaseAllowance(_gauge, type(uint).max);
         internal_bribes[_gauge] = _internal_bribe;
         external_bribes[_gauge] = _external_bribe;
         gauges[_4pool] = _gauge;
@@ -334,7 +333,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         address _internal_bribe = IBribeFactory(bribeFactory).createInternalBribe(internalRewards);
         address _external_bribe = IBribeFactory(bribeFactory).createExternalBribe(allowedRewards);
         address _gauge = IGaugeFactory(gaugeFactory).createGauge(_pool, _internal_bribe, _external_bribe, ve, allowedRewards);
-        IERC20(token).safeIncreaseAllowance(_gauge, type(uint).max);
+        IERC20Upgradeable(token).safeIncreaseAllowance(_gauge, type(uint).max);
         if (IVe(ve).token() == _pool) {
             SATIN_CASH_LP_GAUGE = _gauge;
         }
@@ -391,7 +390,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         // without votes rewards can not be added
         require(_totalWeight != 0, "!weights");
         // transfer the distro in
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
         // 1e18 adjustment is removed during claim
         uint _ratio = (amount * 1e18) / _totalWeight;
         if (_ratio > 0) {
@@ -490,7 +489,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         require(msg.sender == veDist);
         uint _veShare = veShare;
         veShare = 0;
-        IERC20(token).safeTransfer(msg.sender, _veShare);
+        IERC20Upgradeable(token).safeTransfer(msg.sender, _veShare);
     }
 
     function _distribute(address _gauge) internal nonReentrant {
@@ -535,8 +534,8 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
 
     function calculateSatinCashLPVeShare(uint _claimable) public view returns (uint) {
         address satinCashLPtoken = IVe(ve).token();
-        uint _veShare = IERC20(satinCashLPtoken).balanceOf(ve);
-        uint totalSupply = IERC20(satinCashLPtoken).totalSupply();
+        uint _veShare = IERC20Upgradeable(satinCashLPtoken).balanceOf(ve);
+        uint totalSupply = IERC20Upgradeable(satinCashLPtoken).totalSupply();
         return (_claimable * _veShare) / totalSupply;
     }
 

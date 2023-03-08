@@ -7,9 +7,10 @@ import "../../interface/IMultiRewardsPool.sol";
 import "../../lib/Math.sol";
 import "../../lib/SafeERC20.sol";
 import "../../lib/CheckpointLib.sol";
-import "../Reentrancy.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
+abstract contract MultiRewardsPoolBase is Initializable, ReentrancyGuardUpgradeable, IMultiRewardsPool {
     using SafeERC20 for IERC20;
     using CheckpointLib for mapping(uint => CheckpointLib.Checkpoint);
 
@@ -17,7 +18,7 @@ abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
     address public operator;
 
     /// @dev The LP token that needs to be staked for rewards
-    address public immutable override underlying;
+    address public override underlying;
 
     uint public override derivedSupply;
     mapping(address => uint) public override derivedBalances;
@@ -63,7 +64,8 @@ abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
     event NotifyReward(address indexed from, address indexed reward, uint amount);
     event ClaimRewards(address indexed from, address indexed reward, uint amount, address recepient);
 
-    constructor(address _stake, address _operator, address[] memory _allowedRewardTokens) {
+    function initialize(address _stake, address _operator, address[] memory _allowedRewardTokens) public initializer {
+        __ReentrancyGuard_init();
         underlying = _stake;
         operator = _operator;
         for (uint i; i < _allowedRewardTokens.length; i++) {
@@ -153,7 +155,7 @@ abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
     //************************ USER ACTIONS ************************************
     //**************************************************************************
 
-    function _deposit(uint amount) internal virtual lock {
+    function _deposit(uint amount) internal virtual nonReentrant {
         require(amount > 0, "Zero amount");
         _increaseBalance(msg.sender, amount);
         IERC20(underlying).safeTransferFrom(msg.sender, address(this), amount);
@@ -169,7 +171,7 @@ abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
         _updateDerivedBalanceAndWriteCheckpoints(account);
     }
 
-    function _withdraw(uint amount) internal virtual lock {
+    function _withdraw(uint amount) internal virtual nonReentrant {
         _decreaseBalance(msg.sender, amount);
         IERC20(underlying).safeTransfer(msg.sender, amount);
         emit Withdraw(msg.sender, amount);
@@ -185,7 +187,7 @@ abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
     }
 
     /// @dev Implement restriction checks!
-    function _getReward(address account, address[] memory tokens, address recipient) internal virtual lock {
+    function _getReward(address account, address[] memory tokens, address recipient) internal virtual nonReentrant {
         for (uint i = 0; i < tokens.length; i++) {
             (rewardPerTokenStored[tokens[i]], lastUpdateTime[tokens[i]]) = _updateRewardPerToken(tokens[i], type(uint).max, true);
 
@@ -325,7 +327,7 @@ abstract contract MultiRewardsPoolBase is Reentrancy, IMultiRewardsPool {
     //************************ NOTIFY ******************************************
     //**************************************************************************
 
-    function _notifyRewardAmount(address token, uint amount) internal virtual lock {
+    function _notifyRewardAmount(address token, uint amount) internal virtual nonReentrant {
         require(token != underlying, "Wrong token for rewards");
         require(amount > 0, "Zero amount");
         require(isRewardToken[token], "Token not allowed");

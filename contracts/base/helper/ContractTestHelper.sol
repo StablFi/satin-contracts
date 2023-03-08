@@ -7,7 +7,7 @@ import "../vote/Ve.sol";
 import "../../interface/IVeDist.sol";
 
 contract ContractTestHelper is IERC721Receiver {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
     using Math for uint;
 
     // function pairCurrentTwice(

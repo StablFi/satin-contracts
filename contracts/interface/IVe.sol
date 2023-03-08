@@ -58,7 +58,7 @@ interface IVe {
 
     function abstain(uint tokenId) external;
 
-    function getTotalVotingPower() external view returns (uint);
+    function totalSupply() external view returns (uint);
 
     function VeOwner() external view returns (address);
 
