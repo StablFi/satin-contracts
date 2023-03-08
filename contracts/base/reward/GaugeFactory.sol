@@ -5,22 +5,13 @@ pragma solidity ^0.8.13;
 import "../../interface/IGaugeFactory.sol";
 import "./Gauge.sol";
 
+pragma solidity 0.8.13;
+
 contract GaugeFactory is IGaugeFactory {
-    address public lastGauge;
+    address public last_gauge;
 
-    event GaugeCreated(address value);
-
-    function createGauge(address _pool, address _bribe, address _ve, address[] memory _allowedRewardTokens) external override returns (address) {
-        address _lastGauge = address(new Gauge(_pool, _bribe, _ve, msg.sender, _allowedRewardTokens));
-        lastGauge = _lastGauge;
-        emit GaugeCreated(_lastGauge);
-        return _lastGauge;
-    }
-
-    function createGaugeSingle(address _pool, address _bribe, address _ve, address _voter, address[] memory _allowedRewardTokens) external override returns (address) {
-        address _lastGauge = address(new Gauge(_pool, _bribe, _ve, _voter, _allowedRewardTokens));
-        lastGauge = _lastGauge;
-        emit GaugeCreated(_lastGauge);
-        return _lastGauge;
+    function createGauge(address _pool, address _internal_bribe, address _external_bribe, address _ve, address[] memory allowedRewards) external override returns (address) {
+        last_gauge = address(new Gauge(_pool, _internal_bribe, _external_bribe, _ve, msg.sender, allowedRewards));
+        return last_gauge;
     }
 }

@@ -403,8 +403,10 @@ contract VeDist is IVeDist, Initializable {
                     if (balanceOf == 0 && userEpoch > maxUserEpoch) {
                         break;
                     }
-                    cashToDistribute += (balanceOf * tokenEmissionPerWeek[cash][weekCursor]) / veSupply[weekCursor];
-                    tokenToDistribute += (balanceOf * tokenEmissionPerWeek[token][weekCursor]) / veSupply[weekCursor];
+                    if (veSupply[weekCursor] > 0) {
+                        cashToDistribute += (balanceOf * tokenEmissionPerWeek[cash][weekCursor]) / veSupply[weekCursor];
+                        tokenToDistribute += (balanceOf * tokenEmissionPerWeek[token][weekCursor]) / veSupply[weekCursor];
+                    }
                     weekCursor += WEEK;
                 }
             }

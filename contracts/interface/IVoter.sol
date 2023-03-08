@@ -19,9 +19,15 @@ interface IVoter {
 
     function gauges(address _pool) external view returns (address);
 
-    function bribes(address _gauge) external view returns (address);
+    function isWhitelisted(address _token) external view returns (bool);
+
+    function internal_bribes(address _gauge) external view returns (address);
+
+    function external_bribes(address _gauge) external view returns (address);
 
     function getVeShare() external;
+
+    function viewSatinCashLPGaugeAddress() external view returns (address);
 
     function distributeAll() external;
 }

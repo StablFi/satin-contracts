@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: MIT
+pragma solidity 0.8.13;
 
-pragma solidity ^0.8.13;
-
-import "./Bribe.sol";
-import "../../interface/IBribeFactory.sol";
+import "contracts/interface/IBribeFactory.sol";
+import "./InternalBribe.sol";
+import "./ExternalBribe.sol";
 
 contract BribeFactory is IBribeFactory {
-    address public lastGauge;
+    address public last_internal_bribe;
+    address public last_external_bribe;
 
-    event BribeCreated(address value);
+    function createInternalBribe(address[] memory allowedRewards) external returns (address) {
+        last_internal_bribe = address(new InternalBribe(msg.sender, allowedRewards));
+        return last_internal_bribe;
+    }
 
-    function createBribe(address[] memory _allowedRewardTokens) external override returns (address) {
-        address _lastGauge = address(new Bribe(msg.sender, _allowedRewardTokens));
-        lastGauge = _lastGauge;
-        emit BribeCreated(_lastGauge);
-        return _lastGauge;
+    function createExternalBribe(address[] memory allowedRewards) external returns (address) {
+        last_external_bribe = address(new ExternalBribe(msg.sender, allowedRewards));
+        return last_external_bribe;
     }
 }

@@ -16,7 +16,8 @@ contract Gauge is IGauge, MultiRewardsPoolBase {
 
     /// @dev The ve token used for gauges
     address public immutable ve;
-    address public immutable bribe;
+    address public immutable internal_bribe;
+    address public immutable external_bribe;
     address public immutable voter;
 
     mapping(address => uint) public tokenIds;
@@ -28,8 +29,16 @@ contract Gauge is IGauge, MultiRewardsPoolBase {
     event VeTokenLocked(address indexed account, uint tokenId);
     event VeTokenUnlocked(address indexed account, uint tokenId);
 
-    constructor(address _stake, address _bribe, address _ve, address _voter, address[] memory _allowedRewardTokens) MultiRewardsPoolBase(_stake, _voter, _allowedRewardTokens) {
-        bribe = _bribe;
+    constructor(
+        address _stake,
+        address _internal_bribe,
+        address _external_bribe,
+        address _ve,
+        address _voter,
+        address[] memory _allowedRewardTokens
+    ) MultiRewardsPoolBase(_stake, _voter, _allowedRewardTokens) {
+        internal_bribe = _internal_bribe;
+        external_bribe = _external_bribe;
         ve = _ve;
         voter = _voter;
     }
@@ -45,17 +54,17 @@ contract Gauge is IGauge, MultiRewardsPoolBase {
             uint _fees0 = fees0 + claimed0;
             uint _fees1 = fees1 + claimed1;
             (address _token0, address _token1) = IPair(_underlying).tokens();
-            if (_fees0 > IMultiRewardsPool(bribe).left(_token0)) {
+            if (_fees0 > IBribe(internal_bribe).left(_token0) && _fees0 / DURATION > 0) {
                 fees0 = 0;
-                IERC20(_token0).safeIncreaseAllowance(bribe, _fees0);
-                IBribe(bribe).notifyRewardAmount(_token0, _fees0);
+                IERC20(_token0).safeIncreaseAllowance(internal_bribe, _fees0);
+                IBribe(internal_bribe).notifyRewardAmount(_token0, _fees0);
             } else {
                 fees0 = _fees0;
             }
-            if (_fees1 > IMultiRewardsPool(bribe).left(_token1)) {
+            if (_fees1 > IBribe(internal_bribe).left(_token1) && _fees1 / DURATION > 0) {
                 fees1 = 0;
-                IERC20(_token1).safeIncreaseAllowance(bribe, _fees1);
-                IBribe(bribe).notifyRewardAmount(_token1, _fees1);
+                IERC20(_token1).safeIncreaseAllowance(internal_bribe, _fees1);
+                IBribe(internal_bribe).notifyRewardAmount(_token1, _fees1);
             } else {
                 fees1 = _fees1;
             }

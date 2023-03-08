@@ -108,6 +108,8 @@ module.exports = {
     stabl: {
       url: "https://internal-rpc.stabl.fi",
       accounts: [PRIVATE_KEY],
+      gasPrice: 3000e9, // in wei
+      gasMultiplier: 1.2,
     },
   },
   mocha: {

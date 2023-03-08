@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 interface IBribeFactory {
-  function createBribe(address[] memory _allowedRewardTokens) external returns (address);
+    function createInternalBribe(address[] memory) external returns (address);
+
+    function createExternalBribe(address[] memory) external returns (address);
 }

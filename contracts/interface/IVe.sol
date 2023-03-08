@@ -60,5 +60,7 @@ interface IVe {
 
     function getTotalVotingPower() external view returns (uint);
 
+    function VeOwner() external view returns (address);
+
     function isOwnerNFTID(uint _tokenID) external view returns (bool);
 }

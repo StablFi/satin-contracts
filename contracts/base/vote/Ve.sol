@@ -923,7 +923,7 @@ contract Ve is IERC721, IERC721Metadata, IVe, Initializable, ReentrancyGuardUpgr
         address _underlying = token;
         (claimed0, claimed1) = IPair(_underlying).claimFees();
         address gauge = IVoter(_voter()).gauges(token);
-        address bribe = IVoter(_voter()).bribes(gauge);
+        address bribe = IVoter(_voter()).internal_bribes(gauge);
         if (claimed0 > 0 || claimed1 > 0) {
             uint _fees0 = fees0 + claimed0;
             uint _fees1 = fees1 + claimed1;

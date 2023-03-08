@@ -65,7 +65,7 @@ contract SatinMinter is IMinter, Initializable {
         token = IUnderlying(token_);
         ve = IVe(ve_);
         controller = controller_;
-        activePeriod = (block.timestamp / _WEEK) * _WEEK;
+        activePeriod = ((block.timestamp + _WEEK) / _WEEK) * _WEEK;
         periodEmissionsEnd = ((block.timestamp + (491 * _WEEK)) / _WEEK) * _WEEK;
         WEEKLY_EMISSION = 315_000_000e18;
         growthDivider = 20;
@@ -127,7 +127,7 @@ contract SatinMinter is IMinter, Initializable {
 
             token.approve(address(_voter()), _weekly - _growth);
             _voter().notifyRewardAmount(_weekly - _growth);
-            _voter().distributeAll();
+            _voter().distribute(_voter().viewSatinCashLPGaugeAddress());
 
             IERC20(address(token)).safeTransfer(address(_veDist()), _growth);
             // checkpoint token balance that was just minted in veDist

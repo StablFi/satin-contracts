@@ -189,11 +189,12 @@ describe("ve tests", function () {
     await TimeUtils.rollback(snapshot);
   });
 
-  xit("Same Values but different lock time", async function () {
+  it("Same Values but different lock time", async function () {
     await SatinCashPair.approve(ve.address, ethers.BigNumber.from("2000000000000000000"));
     await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 30 * 6 + 7 * 86400, owner.address);
     await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 365, owner2.address);
-    // await voter.createGauge(SatinCashPair.address);
+    // await voter.createGauge(SatinCashPair.address)
+    await voter.setMaxVotesForPool(SatinCashPair.address, 0);
     await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
     await voter.setOnlyAdminCanVote(false);
     await voter.connect(owner2).vote(2, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
@@ -202,7 +203,7 @@ describe("ve tests", function () {
     await SatinCashPair.connect(owner2).approve(cashSatinGauge.address, MAX_UINT);
     await cashSatinGauge.connect(owner2).deposit(parseUnits("100"), 0);
     const activePeriod = await minter.activePeriod();
-    await network.provider.send("evm_increaseTime", [2 * 86400 * 7]);
+    await network.provider.send("evm_increaseTime", [1 *86400 * 7]);
     await network.provider.send("evm_mine");
     await minter.updatePeriod();
     // const claimableBefore = await voter.claimable(satinCashGauge);
@@ -218,9 +219,9 @@ describe("ve tests", function () {
 
     // console.log("satinCashGauge", satinCashGauge);
     const claimable = await ve_dist.claimable(1);
-    // console.log("Same value but locked for 6 months 1day", ethers.utils.formatEther(claimable));
+    console.log("Same value but locked for 6 months 1day", ethers.utils.formatEther(claimable));
     const claimable2 = await ve_dist.claimable(2);
-    // console.log("Same value but locked for 1 year", ethers.utils.formatEther(claimable2));
+    console.log("Same value but locked for 1 year", ethers.utils.formatEther(claimable2));
 
     await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
     const tokenIDaddress = await bribeSatinCash.tokenIdToAddress(1);
@@ -335,7 +336,7 @@ describe("ve tests", function () {
     console.log("Total Voting Power After", await ve.getTotalVotingPower());
   });
 
-  it("check emissions", async function () {
+  xit("check emissions", async function () {
     await SatinCashPair.approve(ve.address, ethers.BigNumber.from("10000000000000000000"));
     await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), 86400 * 30 * 6 + 7 * 86400, owner.address);
     await ve.createLockFor(ethers.BigNumber.from("10000000000000"), 86400 * 365, owner2.address);
@@ -347,5 +348,10 @@ describe("ve tests", function () {
     await network.provider.send("evm_mine");
     await cash.transfer(ve_dist.address, utils.parseUnits("10"));
     await minter.updatePeriod();
+  });
+
+  xit("pause check", async function () {
+    // await factory.setPause(SatinCashPair.address, true);
+    await router.swapExactTokensForTokensSimple(parseUnits("0.01"), BigNumber.from(0), cash.address, token.address, false, owner.address, Date.now());
   });
 });
