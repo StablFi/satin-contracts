@@ -66,8 +66,8 @@ contract SatinMinter is IMinter, Initializable {
         controller = controller_;
         activePeriod = ((block.timestamp + _WEEK) / _WEEK) * _WEEK;
         periodEmissionsEnd = ((block.timestamp + (491 * _WEEK)) / _WEEK) * _WEEK;
-        WEEKLY_EMISSION = 315_000_000e18;
-        growthDivider = 25;
+        WEEKLY_EMISSION = 312_000_000e18;
+        growthDivider = 49;
     }
 
     // function postInitialize(uint totalAmount) external {

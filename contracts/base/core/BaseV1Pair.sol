@@ -154,7 +154,7 @@ contract BaseV1Pair is Initializable, ReentrancyGuardUpgradeable, IERC20, IPair 
                 ///@dev 0.01% Stable swap fee
                 swapFee = SWAP_FEE_STABLE;
             } else {
-                ///@dev 0.1% Volatile swap fee
+                ///@dev 0.2% Volatile swap fee
                 swapFee = SWAP_FEE_VOLATILE;
             }
         }
@@ -230,21 +230,6 @@ contract BaseV1Pair is Initializable, ReentrancyGuardUpgradeable, IERC20, IPair 
         }
         emit Fees(msg.sender, amount, 0);
     }
-
-    /// @dev Accrue fees on token0
-    // function _update0(uint256 amount) internal {
-    //     uint256 feeToPartner = (amount * PARTNER_FEE) / BASE_FEE;
-    //     uint256 treasuryFee = (amount * TREASURY_FEE) / BASE_FEE;
-    //     uint256 feeAmount = amount - (feeToPartner + treasuryFee);
-    //     IERC20(token0).safeTransfer(fees, (amount - treasuryFee)); // transfer the fees out to BaseV1Fees
-    //     IERC20(token0).safeTransfer(treasury, treasuryFee); // transfer the fees out to BaseV1Fees
-    //     partnerClaimable0 += feeToPartner;
-    //     uint256 _ratio = (feeAmount * 1e18) / totalSupply; // 1e18 adjustment is removed during claim
-    //     if (_ratio > 0) {
-    //         index0 += _ratio;
-    //     }
-    //     emit Fees(msg.sender, amount, 0);
-    // }
 
     /// @dev Accrue fees on token1
     function _update1(uint256 amount) internal {

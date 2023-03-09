@@ -193,9 +193,11 @@ describe("Upgradeable", function () {
   });
 
   it("Gauge upgrade working", async function () {
+    const [_, newProxyAdminOwner] = await ethers.getSigners();
     const gaugeFactory = await ethers.getContractFactory("Gauge");
     const _gauge = await upgrades.forceImport(lastGauge, gaugeFactory);
-    const gaugeUpgrade = await ethers.getContractFactory("Gauge_Upgrade");
+    await upgrades.admin.transferProxyAdminOwnership(newProxyAdminOwner.address);
+    const gaugeUpgrade = await ethers.getContractFactory("Gauge_Upgrade", newProxyAdminOwner);
     const upgradedContract = await upgrades.upgradeProxy(_gauge, gaugeUpgrade);
     expect(await upgradedContract.newFunction()).eq(1234);
     expect(await upgradedContract.internal_bribe()).eq(last_internal_bribe);
@@ -203,9 +205,10 @@ describe("Upgradeable", function () {
   });
 
   it("ExternalBribe upgrade working", async function () {
+    const [_, newProxyAdminOwner] = await ethers.getSigners();
     const externalBribeFactory = await ethers.getContractFactory("ExternalBribe");
     const _externalBribe = await upgrades.forceImport(last_external_bribe, externalBribeFactory);
-    const externalBribeUpgrade = await ethers.getContractFactory("ExternalBribe_Upgrade");
+    const externalBribeUpgrade = await ethers.getContractFactory("ExternalBribe_Upgrade", newProxyAdminOwner);
     const upgradedContract = await upgrades.upgradeProxy(_externalBribe, externalBribeUpgrade);
     expect(await upgradedContract.newFunction()).eq(1234);
     expect(await upgradedContract.isReward(tokenA.address)).to.be.true;
@@ -213,9 +216,10 @@ describe("Upgradeable", function () {
   });
 
   it("InternalBribe upgrade working", async function () {
+    const [_, newProxyAdminOwner] = await ethers.getSigners();
     const internalBribeFactory = await ethers.getContractFactory("InternalBribe");
     const _internalBribe = await upgrades.forceImport(last_internal_bribe, internalBribeFactory);
-    const internalBribeUpgrade = await ethers.getContractFactory("InternalBribe_Upgrade");
+    const internalBribeUpgrade = await ethers.getContractFactory("InternalBribe_Upgrade", newProxyAdminOwner);
     const upgradedContract = await upgrades.upgradeProxy(_internalBribe, internalBribeUpgrade);
     expect(await upgradedContract.newFunction()).eq(1234);
     expect(await upgradedContract.isReward(tokenA.address)).to.be.true;

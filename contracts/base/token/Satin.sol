@@ -17,7 +17,6 @@ contract Satin is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, Pau
         __Pausable_init();
         __Ownable_init();
         minter = msg.sender;
-        _mint(msg.sender, 3514796667 * 10 ** decimals());
     }
 
     // No checks as its meant to be once off to set minting rights to Minter

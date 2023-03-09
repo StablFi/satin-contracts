@@ -48,21 +48,7 @@ contract BaseV1Router01 is Initializable {
 
     // calculates the CREATE2 address for a pair without making any external calls
     function pairFor(address tokenA, address tokenB, bool stable) public view returns (address pair) {
-        (address token0, address token1) = SatinLibrary.sortTokens(tokenA, tokenB);
-        pair = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            hex"ff",
-                            factory,
-                            keccak256(abi.encodePacked(token0, token1, stable)),
-                            pairCodeHash // init code hash
-                        )
-                    )
-                )
-            )
-        );
+        pair = IFactory(factory).getPair(tokenA, tokenB, stable);
     }
 
     // given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
