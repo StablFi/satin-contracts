@@ -6,6 +6,7 @@ require("hardhat-interface-generator");
 require("hardhat-tracer");
 require("@typechain/hardhat");
 require("@nomiclabs/hardhat-etherscan");
+require("hardhat-gas-reporter");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 // const RINKEBY_RPC_URL = process.env.RINKEBY_RPC_URL
@@ -62,13 +63,6 @@ module.exports = {
     ],
   },
   networks: {
-    mumbai: {
-      url: "https://matic-mumbai.chainstacklabs.com",
-      chainId: 80001,
-      gas: 12000000,
-      blockGasLimit: 0x1fffffffffffff,
-      accounts: [PRIVATE_KEY],
-    },
     hardhat: {
       // forking: {
       //   url: "https://rpc-mumbai.maticvigil.com",
@@ -95,8 +89,8 @@ module.exports = {
       gasPrice: 300e9, // in wei
       gasMultiplier: 1.2,
     },
-    mumbaiPolygonTestnet: {
-      url: "https://matic-mumbai.chainstacklabs.com",
+    mumbai: {
+      url: process.env.TESTNET_RPC,
       chainId: 80001,
       accounts: [PRIVATE_KEY],
     },
@@ -120,5 +114,8 @@ module.exports = {
   },
   paths: {
     sources: "./contracts",
+  },
+  gasReporter: {
+    enabled: true,
   },
 };

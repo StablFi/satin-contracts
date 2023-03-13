@@ -41,6 +41,8 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     // getTokenIndex function also relies on this mapping to retrieve token index.
     mapping(address => uint8) private tokenIndexes;
 
+    address public rebaseHandler;
+
     /*** EVENTS ***/
 
     // events replicated from SwapUtils to make the ABI easier for dumb
@@ -134,6 +136,11 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      */
     modifier deadlineCheck(uint256 deadline) {
         require(block.timestamp <= deadline, "Deadline not met");
+        _;
+    }
+
+    modifier onlyOwnerOrRebaseHandler() {
+        require(msg.sender == owner() || msg.sender == rebaseHandler);
         _;
     }
 
@@ -296,11 +303,7 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param deadline latest timestamp to accept this transaction
      * @return amount of LP token user minted and received
      */
-    function addLiquidity(
-        uint256[] calldata amounts,
-        uint256 minToMint,
-        uint256 deadline
-    ) external virtual nonReentrant whenNotPaused deadlineCheck(deadline) returns (uint256) {
+    function addLiquidity(uint256[] calldata amounts, uint256 minToMint, uint256 deadline) external virtual nonReentrant whenNotPaused deadlineCheck(deadline) returns (uint256) {
         return swapStorage.addLiquidity(amounts, minToMint);
     }
 
@@ -314,15 +317,11 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
      * @param deadline latest timestamp to accept this transaction
      * @return amounts of tokens user received
      */
-    function removeLiquidity(
-        uint256 amount,
-        uint256[] calldata minAmounts,
-        uint256 deadline
-    ) external virtual nonReentrant deadlineCheck(deadline) returns (uint256[] memory) {
+    function removeLiquidity(uint256 amount, uint256[] calldata minAmounts, uint256 deadline) external virtual nonReentrant deadlineCheck(deadline) returns (uint256[] memory) {
         return swapStorage.removeLiquidity(amount, minAmounts);
     }
 
-    function skim(address _to) external virtual nonReentrant whenNotPaused {
+    function skim(address _to) external virtual nonReentrant whenNotPaused onlyOwnerOrRebaseHandler {
         return swapStorage.skim(_to);
     }
 
@@ -365,9 +364,16 @@ contract Swap is OwnerPausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgra
     /*** ADMIN FUNCTIONS ***/
 
     /**
+     * @notice Set the address for rebaseHandler variable
+     */
+    function setRebaseHandler(address _rebaseHandler) external onlyOwner {
+        rebaseHandler = _rebaseHandler;
+    }
+
+    /**
      * @notice Withdraw all admin fees to the contract owner
      */
-    function withdrawAdminFees() external virtual onlyOwner {
+    function withdrawAdminFees() external virtual onlyOwnerOrRebaseHandler {
         swapStorage.withdrawAdminFees(owner());
     }
 

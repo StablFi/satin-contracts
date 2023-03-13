@@ -128,7 +128,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     /// @dev Remove all votes for given tokenId.
     function reset(uint _tokenId) external onlyNewEpoch(_tokenId) {
         require(IVe(ve).isApprovedOrOwner(msg.sender, _tokenId), "!owner");
-        lastVoted[_tokenId] = block.timestamp;
+        lastVoted[_tokenId] = IMinter(minter).activePeriod();
         _reset(_tokenId);
         IVe(ve).abstain(_tokenId);
     }
@@ -231,7 +231,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         require(IVe(ve).isApprovedOrOwner(msg.sender, tokenId), "!owner");
         require(_poolVote.length == _weights.length, "!arrays");
         require(!onlyAdminCanVote || IVe(ve).isOwnerNFTID(tokenId), "Paused");
-        lastVoted[tokenId] = block.timestamp;
+        lastVoted[tokenId] = IMinter(minter).activePeriod();
         _vote(tokenId, _poolVote, _weights);
     }
 
@@ -258,7 +258,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
 
     modifier onlyNewEpoch(uint _tokenId) {
         // ensure new epoch since last vote
-        require((block.timestamp / DURATION) * DURATION > lastVoted[_tokenId], "TOKEN_ALREADY_VOTED_THIS_EPOCH");
+        require((IMinter(minter).activePeriod()) > lastVoted[_tokenId], "TOKEN_ALREADY_VOTED_THIS_EPOCH");
         _;
     }
 
