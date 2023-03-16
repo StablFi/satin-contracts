@@ -12,7 +12,7 @@ import "../../interface/IBribeFactory.sol";
 import "../../interface/IGaugeFactory.sol";
 import "../../interface/IMinter.sol";
 import "../../interface/IVeDist.sol";
-import "../../interface/IBribe.sol";
+import "../../interface/IInternalBribe.sol";
 import "../../interface/IMultiRewardsPool.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
@@ -33,6 +33,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     uint internal constant DURATION = 7 days;
     address public minter;
     address public owner;
+    address public rebaseHandler;
     address internal SATIN_CASH_LP_GAUGE;
 
     /// @dev Total voting weight
@@ -145,8 +146,8 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
             weights[_pool] -= _votes;
             votes[_tokenId][_pool] -= _votes;
             if (_votes > 0) {
-                IBribe(internal_bribes[gauges[_pool]])._withdraw(uint256(_votes), _tokenId);
-                IBribe(external_bribes[gauges[_pool]])._withdraw(uint256(_votes), _tokenId);
+                IInternalBribe(internal_bribes[gauges[_pool]])._withdraw(uint256(_votes), _tokenId);
+                IInternalBribe(external_bribes[gauges[_pool]])._withdraw(uint256(_votes), _tokenId);
                 _totalWeight += _votes;
             } else {
                 _totalWeight -= _votes;
@@ -206,8 +207,8 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
                 }
                 votes[_tokenId][_pool] += _poolWeight;
                 if (_poolWeight > 0) {
-                    IBribe(internal_bribes[_gauge])._deposit(uint256(_poolWeight), _tokenId);
-                    IBribe(external_bribes[_gauge])._deposit(uint256(_poolWeight), _tokenId);
+                    IInternalBribe(internal_bribes[_gauge])._deposit(uint256(_poolWeight), _tokenId);
+                    IInternalBribe(external_bribes[_gauge])._deposit(uint256(_poolWeight), _tokenId);
                 } else {
                     _poolWeight = -_poolWeight;
                 }
@@ -299,6 +300,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         address _internal_bribe = IBribeFactory(bribeFactory).createInternalBribe(internalRewards);
         address _external_bribe = IBribeFactory(bribeFactory).createExternalBribe(allowedRewards);
         address _gauge = IGaugeFactory(gaugeFactory).createGauge(_4pool, _internal_bribe, _external_bribe, ve, allowedRewards);
+        IInternalBribe(_internal_bribe).setGauge(_gauge);
         is4poolGauge[_gauge] = true;
 
         IERC20Upgradeable(token).safeIncreaseAllowance(_gauge, type(uint).max);
@@ -399,6 +401,16 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         emit NotifyReward(msg.sender, token, amount);
     }
 
+    function setRebaseHandler(address _rebaseHandler) external {
+        require(msg.sender == owner, "!VoterOwner");
+        rebaseHandler = _rebaseHandler;
+    }
+
+    function notifyRewardAmountGauge(address _gauge, address _token, uint _amount, bool _is4pool) external override {
+        require(msg.sender == rebaseHandler, "!allowed");
+        IGauge(_gauge).notifyRewardAmount(_token, _amount, _is4pool);
+    }
+
     /// @dev Update given gauges.
     function updateFor(address[] memory _gauges) external {
         for (uint i = 0; i < _gauges.length; i++) {
@@ -461,7 +473,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     function claimBribes(address[] memory _bribes, address[][] memory _tokens, uint _tokenId) external {
         require(IVe(ve).isApprovedOrOwner(msg.sender, _tokenId), "!owner");
         for (uint i = 0; i < _bribes.length; i++) {
-            IBribe(_bribes[i]).getRewardForOwner(_tokenId, _tokens[i]);
+            IInternalBribe(_bribes[i]).getRewardForOwner(_tokenId, _tokens[i]);
         }
     }
 
@@ -469,7 +481,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     function claimFees(address[] memory _bribes, address[][] memory _tokens, uint _tokenId) external {
         require(IVe(ve).isApprovedOrOwner(msg.sender, _tokenId), "!owner");
         for (uint i = 0; i < _bribes.length; i++) {
-            IBribe(_bribes[i]).getRewardForOwner(_tokenId, _tokens[i]);
+            IInternalBribe(_bribes[i]).getRewardForOwner(_tokenId, _tokens[i]);
         }
     }
 

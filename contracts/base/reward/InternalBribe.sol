@@ -2,16 +2,17 @@
 pragma solidity 0.8.13;
 
 import "contracts/lib/Math.sol";
-import "contracts/interface/IBribe.sol";
+import "contracts/interface/IInternalBribe.sol";
 import "contracts/interface/IERC20.sol";
 import "contracts/interface/IVoter.sol";
 import "contracts/interface/IVe.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 // Bribes pay out rewards for a given pool based on the votes that were received from the user (goes hand in hand with Voter.vote())
-contract InternalBribe is Initializable, IBribe {
+contract InternalBribe is Initializable, IInternalBribe {
     address public voter; // only voter can modify balances (since it only happens on vote())
     address public _ve;
+    address public gauge;
 
     uint public DURATION; // rewards are released over 7 days
     uint public PRECISION;
@@ -444,10 +445,16 @@ contract InternalBribe is Initializable, IBribe {
         return _remaining * rewardRate[token];
     }
 
+    function setGauge(address _gauge) external override {
+        require(msg.sender == voter);
+        gauge = _gauge;
+    }
+
     // used to notify a gauge/bribe of a given reward, this can create griefing attacks by extending rewards
     function notifyRewardAmount(address token, uint amount) external lock {
         require(amount > 0);
         require(isReward[token]);
+        require(msg.sender == _ve || msg.sender == gauge, "!allowed");
 
         if (rewardRate[token] == 0) _writeRewardPerTokenCheckpoint(token, 0, block.timestamp);
         (rewardPerTokenStored[token], lastUpdateTime[token]) = _updateRewardPerToken(token, type(uint).max, true);

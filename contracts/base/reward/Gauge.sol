@@ -145,6 +145,7 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
     }
 
     function notifyRewardAmount(address token, uint amount, bool is4pool) external {
+        require(msg.sender == voter, "!Voter");
         //Cannot claim fees for 4pool address
         if (!is4pool) {
             _claimFees();
