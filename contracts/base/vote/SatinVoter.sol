@@ -95,7 +95,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     //     owner = msg.sender;
     // }
 
-    function initialize(address _ve, address _factory, address _gaugeFactory, address _bribeFactory, address _token, address _veDist) public initializer {
+    function initialize(address _ve, address _factory, address _gaugeFactory, address _bribeFactory, address _token, address _veDist, address _rebaseHandler) public initializer {
         __ReentrancyGuard_init_unchained();
         ve = _ve;
         veDist = _veDist;
@@ -105,6 +105,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         bribeFactory = _bribeFactory;
         minter = msg.sender;
         owner = msg.sender;
+        rebaseHandler = _rebaseHandler;
     }
 
     function postInitialize(address[] memory _tokens, address _minter) external {
@@ -299,7 +300,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
 
         address _internal_bribe = IBribeFactory(bribeFactory).createInternalBribe(internalRewards);
         address _external_bribe = IBribeFactory(bribeFactory).createExternalBribe(allowedRewards);
-        address _gauge = IGaugeFactory(gaugeFactory).createGauge(_4pool, _internal_bribe, _external_bribe, ve, allowedRewards);
+        address _gauge = IGaugeFactory(gaugeFactory).createGauge(_4pool, _internal_bribe, _external_bribe, ve, allowedRewards, rebaseHandler);
         IInternalBribe(_internal_bribe).setGauge(_gauge);
         is4poolGauge[_gauge] = true;
 
@@ -334,7 +335,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
 
         address _internal_bribe = IBribeFactory(bribeFactory).createInternalBribe(internalRewards);
         address _external_bribe = IBribeFactory(bribeFactory).createExternalBribe(allowedRewards);
-        address _gauge = IGaugeFactory(gaugeFactory).createGauge(_pool, _internal_bribe, _external_bribe, ve, allowedRewards);
+        address _gauge = IGaugeFactory(gaugeFactory).createGauge(_pool, _internal_bribe, _external_bribe, ve, allowedRewards, rebaseHandler);
         IERC20Upgradeable(token).safeIncreaseAllowance(_gauge, type(uint).max);
         if (IVe(ve).token() == _pool) {
             SATIN_CASH_LP_GAUGE = _gauge;
@@ -406,9 +407,9 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         rebaseHandler = _rebaseHandler;
     }
 
-    function notifyRewardAmountGauge(address _gauge, address _token, uint _amount, bool _is4pool) external override {
-        require(msg.sender == rebaseHandler, "!allowed");
-        IGauge(_gauge).notifyRewardAmount(_token, _amount, _is4pool);
+    function setRebaseHandlerForGauge(address _gauge, address _rebaseHandler) external {
+        require(msg.sender == owner, "!VoterOwner");
+        IGauge(_gauge).changeRebaseHandler(_rebaseHandler);
     }
 
     /// @dev Update given gauges.

@@ -21,6 +21,7 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
     address public internal_bribe;
     address public external_bribe;
     address public voter;
+    address public rebaseHandler;
 
     mapping(address => uint) public tokenIds;
 
@@ -31,13 +32,22 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
     event VeTokenLocked(address indexed account, uint tokenId);
     event VeTokenUnlocked(address indexed account, uint tokenId);
 
-    function initialize(address _stake, address _internal_bribe, address _external_bribe, address _ve, address _voter, address[] memory _allowedRewardTokens) public initializer {
+    function initialize(
+        address _stake,
+        address _internal_bribe,
+        address _external_bribe,
+        address _ve,
+        address _voter,
+        address[] memory _allowedRewardTokens,
+        address _rebaseHandler
+    ) public initializer {
         __ReentrancyGuard_init();
         MultiRewardsPoolBase.initialize(_stake, _voter, _allowedRewardTokens);
         internal_bribe = _internal_bribe;
         external_bribe = _external_bribe;
         ve = _ve;
         voter = _voter;
+        rebaseHandler = _rebaseHandler;
     }
 
     function claimFees() external override nonReentrant returns (uint claimed0, uint claimed1) {
@@ -144,8 +154,13 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
         return Math.min((_derived + _adjusted), _balance);
     }
 
+    function changeRebaseHandler(address _rebaseHandler) external {
+        require(msg.sender == voter, "!voter");
+        rebaseHandler = _rebaseHandler;
+    }
+
     function notifyRewardAmount(address token, uint amount, bool is4pool) external {
-        require(msg.sender == voter, "!Voter");
+        require(msg.sender == voter || msg.sender == rebaseHandler, "!allowed");
         //Cannot claim fees for 4pool address
         if (!is4pool) {
             _claimFees();
