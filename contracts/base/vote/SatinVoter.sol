@@ -336,6 +336,7 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
         address _internal_bribe = IBribeFactory(bribeFactory).createInternalBribe(internalRewards);
         address _external_bribe = IBribeFactory(bribeFactory).createExternalBribe(allowedRewards);
         address _gauge = IGaugeFactory(gaugeFactory).createGauge(_pool, _internal_bribe, _external_bribe, ve, allowedRewards, rebaseHandler);
+        IInternalBribe(_internal_bribe).setGauge(_gauge);
         IERC20Upgradeable(token).safeIncreaseAllowance(_gauge, type(uint).max);
         if (IVe(ve).token() == _pool) {
             SATIN_CASH_LP_GAUGE = _gauge;
