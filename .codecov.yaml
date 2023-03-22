@@ -1,0 +1,14 @@
+comment:
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false
+github_checks:
+  comment: true
+  annotations: true
+coverage:
+  status:
+    patch:
+      default:
+        target: 100%
+ignore:
+  - "contracts/test"

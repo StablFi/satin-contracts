@@ -1,12 +1,10 @@
 const { ethers } = require("hardhat");
+const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 class TimeUtils {
   static async advanceBlocksOnTs(add) {
-    const start = Date.now();
-    // const block = await TimeUtils.currentBlock();
-    await ethers.provider.send("evm_increaseTime", [add]);
-    await ethers.provider.send("evm_mine", []);
-    // await TimeUtils.mineAndCheck();
+    const block = await ethers.provider.getBlock("latest");
+    await time.increaseTo(block.timestamp + add);
   }
 
   static async advanceNBlocks() {

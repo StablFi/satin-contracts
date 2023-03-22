@@ -7,6 +7,7 @@ require("hardhat-tracer");
 require("@typechain/hardhat");
 require("@nomiclabs/hardhat-etherscan");
 require("hardhat-gas-reporter");
+require("solidity-coverage");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 // const RINKEBY_RPC_URL = process.env.RINKEBY_RPC_URL
@@ -29,7 +30,14 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 100,
+            runs: 5000,
+            details: {
+              yul: true,
+              yulDetails: {
+                stackAllocation: true,
+                optimizerSteps: "dhfoDgvulfnTUtnIf",
+              },
+            },
           },
         },
       },
@@ -38,7 +46,14 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 5000,
+            details: {
+              yul: true,
+              yulDetails: {
+                stackAllocation: true,
+                optimizerSteps: "dhfoDgvulfnTUtnIf",
+              },
+            },
           },
         },
       },
@@ -47,7 +62,14 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 5000,
+            details: {
+              yul: true,
+              yulDetails: {
+                stackAllocation: true,
+                optimizerSteps: "dhfoDgvulfnTUtnIf",
+              },
+            },
           },
         },
       },
@@ -64,9 +86,9 @@ module.exports = {
   },
   networks: {
     hardhat: {
-      // forking: {
-      //   url: "https://rpc-mumbai.maticvigil.com",
-      // },
+      forking: {
+        url: process.env.RPC,
+      },
       mining: {
         auto: true,
         interval: 2000,

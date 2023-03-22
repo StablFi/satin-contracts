@@ -70,10 +70,10 @@ contract SatinMinter is IMinter, Initializable {
         growthDivider = 49;
     }
 
-    // function postInitialize(uint totalAmount) external {
-    //     require(msg.sender == owner);
-    //     token.mint(msg.sender, totalAmount);
-    // }
+    function postInitialize(uint totalAmount) external {
+        require(msg.sender == owner);
+        token.mint(msg.sender, totalAmount);
+    }
 
     function setGrowthDivider(uint _growthDivider) external {
         require(msg.sender == owner);

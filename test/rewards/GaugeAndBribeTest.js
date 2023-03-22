@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, upgrades } = require("hardhat");
 const { factory } = require("typescript");
 const { TimeUtils } = require("../TimeUtils");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -22,27 +22,23 @@ describe("gauge and bribe tests", function () {
   let usdc;
   let dai;
   let cash;
+  let token;
   let wmatic;
   let pair;
-  let controller;
-  let token;
-  let gauges;
-  let bribes;
   let ve;
   let ve_dist;
-  let voter;
   let minter;
-  let SatinCashPair;
-
+  let voter;
+  let USDTCashPair;
   let gauge;
   let bribe;
   let helper;
   let fourPoolLPTokenAddress;
   let fourPoolAddress;
   let SwapContract;
-
-  let gaugeSatinCash;
-  let bribeSatinCash;
+  const tresuryAddress = "0x9c4927530B1719e063D7E181C6c2e56353204e64";
+  let gaugeUSDTCash;
+  let bribeUSDTCash;
 
   before(async function () {
     snapshotBefore = await TimeUtils.snapshot();
@@ -60,8 +56,34 @@ describe("gauge and bribe tests", function () {
     await dai.mint(owner.address, utils.parseUnits("1000000"));
     await cash.mint(owner.address, utils.parseUnits("1000000"));
 
-    let Factory = await ethers.getContractFactory("BaseV1Factory");
-    factory = await upgrades.deployProxy(Factory, [owner3.address]);
+    const _gaugeContract = await ethers.getContractFactory("Gauge");
+    const gaugeImplementation = await _gaugeContract.deploy();
+    console.log("gaugeImplementation is deployed at", gaugeImplementation.address);
+
+    const _internalBribeContract = await ethers.getContractFactory("InternalBribe");
+    const internalBribeImplementation = await _internalBribeContract.deploy();
+    console.log("internalBribeImplementation is deployed at", internalBribeImplementation.address);
+
+    const _externalBribeContract = await ethers.getContractFactory("ExternalBribe");
+    const externalBribeImplementation = await _externalBribeContract.deploy();
+    console.log("externalBribeImplementation is deployed at", externalBribeImplementation.address);
+
+    const ProxyFactory_factory = await ethers.getContractFactory("ProxyFactory");
+    const proxyFactory = await ProxyFactory_factory.deploy();
+    console.log("proxyFactory is deployed at address", proxyFactory.address);
+
+    const poolFactory = await ethers.getContractFactory("BaseV1Pair");
+    const poolImplementation = await poolFactory.deploy();
+    proxyAdmin = await upgrades.deployProxyAdmin();
+
+    let Factory = await ethers.getContractFactory("BaseV1Factory", {
+      libraries: {
+        ProxyFactory: proxyFactory.address,
+      },
+    });
+    const factory = await upgrades.deployProxy(Factory, [tresuryAddress, proxyAdmin, poolImplementation.address], {
+      unsafeAllowLinkedLibraries: true,
+    });
     let Router = await ethers.getContractFactory("BaseV1Router01");
     router = await upgrades.deployProxy(Router, [factory.address, wmatic.address]);
 
@@ -69,26 +91,37 @@ describe("gauge and bribe tests", function () {
 
     pair = await ethers.getContractFactory("BaseV1Pair");
     const Token = await ethers.getContractFactory("Satin");
-    const Gaauges = await ethers.getContractFactory("GaugeFactory");
+    const Gaauges = await ethers.getContractFactory("GaugeFactory", {
+      libraries: {
+        ProxyFactory: proxyFactory.address,
+      },
+    });
     gauge = await ethers.getContractFactory("Gauge");
-    const Briibes = await ethers.getContractFactory("BribeFactory");
-    bribe = await ethers.getContractFactory("Bribe");
+    const Briibes = await ethers.getContractFactory("BribeFactory", {
+      libraries: {
+        ProxyFactory: proxyFactory.address,
+      },
+    });
+    bribe = await ethers.getContractFactory("ExternalBribe");
     const Ve = await ethers.getContractFactory("Ve");
     const Ve_dist = await ethers.getContractFactory("VeDist");
     const BaseV1Voter = await ethers.getContractFactory("SatinVoter");
     const BaseV1Minter = await ethers.getContractFactory("SatinMinter");
     const Controller = await ethers.getContractFactory("Controller");
 
-    controller = await upgrades.deployProxy(Controller);
+    const controller = await upgrades.deployProxy(Controller);
     token = await upgrades.deployProxy(Token);
-    gauges = await upgrades.deployProxy(Gaauges);
-    bribes = await upgrades.deployProxy(Briibes);
-    ve = await upgrades.deployProxy(Ve, [controller.address]);
-    ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address]);
-    voter = await upgrades.deployProxy(BaseV1Voter, [ve.address, factory.address, gauges.address, bribes.address, token.address]);
-    minter = await upgrades.deployProxy(BaseV1Minter, [ve.address, controller.address, token.address]);
-
+    const gauges = await upgrades.deployProxy(Gaauges, [proxyAdmin, gaugeImplementation.address], {
+      unsafeAllowLinkedLibraries: true,
+    });
+    const bribes = await upgrades.deployProxy(Briibes, [proxyAdmin, internalBribeImplementation.address, externalBribeImplementation.address], {
+      unsafeAllowLinkedLibraries: true,
+    });
     const cashAddress = cash.address;
+    ve = await upgrades.deployProxy(Ve, [controller.address]);
+    ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address, cashAddress]);
+    voter = await upgrades.deployProxy(BaseV1Voter, [ve.address, factory.address, gauges.address, bribes.address, token.address, ve_dist.address, owner.address]);
+    minter = await upgrades.deployProxy(BaseV1Minter, [ve.address, controller.address, token.address]);
 
     const voterTokens = [wmatic.address, usdt.address, usdc.address, dai.address, token.address, cash.address];
 
@@ -109,31 +142,31 @@ describe("gauge and bribe tests", function () {
     console.log("Ve contract initialized");
 
     await cash.approve(router.address, MAX_UINT);
-    await token.approve(router.address, MAX_UINT);
+    await usdt.approve(router.address, MAX_UINT);
     await dai.approve(router.address, MAX_UINT);
 
-    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
+    await router.addLiquidity(cashAddress, usdt.address, false, utils.parseUnits("1000"), utils.parseUnits("1000", 6), 1, 1, owner.address, Date.now());
 
     await router.addLiquidity(cashAddress, dai.address, true, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner2.address, Date.now());
+    await router.addLiquidity(cashAddress, usdt.address, false, utils.parseUnits("1000"), utils.parseUnits("1000", 6), 1, 1, owner2.address, Date.now());
 
-    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner3.address, Date.now());
+    await router.addLiquidity(cashAddress, usdt.address, false, utils.parseUnits("1000"), utils.parseUnits("1000", 6), 1, 1, owner3.address, Date.now());
 
-    const SatinCashPairAddress = await router.pairFor(cashAddress, token.address, false);
-    SatinCashPair = pair.attach(SatinCashPairAddress);
+    const USDTCashPairAddress = await router.pairFor(cashAddress, usdt.address, false);
+    USDTCashPair = pair.attach(USDTCashPairAddress);
 
-    await voter.createGauge(SatinCashPairAddress);
-    expect(await voter.gauges(SatinCashPairAddress)).to.not.equal(ZERO_ADDRESS);
+    await voter.createGauge(USDTCashPairAddress);
+    expect(await voter.gauges(USDTCashPairAddress)).to.not.equal(ZERO_ADDRESS);
 
-    const gaugeSatinCashAddress = await voter.gauges(SatinCashPairAddress);
-    const bribeSatinCashAddress = await voter.bribes(gaugeSatinCashAddress);
+    const gaugeUSDTCashAddress = await voter.gauges(USDTCashPairAddress);
+    const bribeUSDTCashAddress = await voter.external_bribes(gaugeUSDTCashAddress);
 
-    gaugeSatinCash = gauge.attach(gaugeSatinCashAddress);
-    bribeSatinCash = bribe.attach(bribeSatinCashAddress);
+    gaugeUSDTCash = gauge.attach(gaugeUSDTCashAddress);
+    bribeUSDTCash = bribe.attach(bribeUSDTCashAddress);
 
-    await SatinCashPair.approve(gaugeSatinCash.address, MAX_UINT);
-    await gaugeSatinCash.deposit(parseUnits("100"), 0);
+    await USDTCashPair.approve(gaugeUSDTCash.address, MAX_UINT);
+    await gaugeUSDTCash.deposit(parseUnits("1000000", 6), 0);
   });
 
   after(async function () {
@@ -150,54 +183,37 @@ describe("gauge and bribe tests", function () {
 
   it("claim fees", async function () {
     const EXPECTED_FEE = "0.25";
-    await SatinCashPair.connect(owner).approve(gaugeSatinCash.address, amount1000At6);
-    // await gaugeSatinCash.connect(owner).deposit(amount1000At6, 0);
-    const fees = await SatinCashPair.fees();
-    await router.addLiquidity(cash.address, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
+    console.log(owner);
+    await USDTCashPair.connect(owner).approve(gaugeUSDTCash.address, amount1000At6);
+    // await gaugeUSDTCash.connect(owner).deposit(amount1000At6, 0);
+    const fees = await USDTCashPair.fees();
+    await router.addLiquidity(cash.address, usdt.address, false, utils.parseUnits("1000"), utils.parseUnits("1000", 6), 1, 1, owner.address, Date.now());
 
     await cash.approve(router.address, parseUnits("99999"));
-    await router.swapExactTokensForTokens(parseUnits("1000"), 0, [{ from: cash.address, to: token.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
-    await token.approve(router.address, MAX_UINT);
-    await SatinCashPair.approve(ve.address, utils.parseUnits("1000"));
+    await router.swapExactTokensForTokens(parseUnits("1000"), 0, [{ from: cash.address, to: usdt.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
+    await usdt.approve(router.address, MAX_UINT);
+    await USDTCashPair.approve(ve.address, utils.parseUnits("1000"));
     await ve.createLockFor(utils.parseUnits("1000"), WEEK, owner.address);
-    await router.swapExactTokensForTokens(
-      parseUnits("1000", 6),
-      0,
-      [{ to: cash.address, from: token.address, stable: false }],
-      owner.address,
-      BigNumber.from("999999999999999999")
-    );
+    await router.swapExactTokensForTokens(parseUnits("1000", 6), 0, [{ to: cash.address, from: usdt.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
 
-    await router.swapExactTokensForTokens(
-      parseUnits("1000", 6),
-      0,
-      [{ to: cash.address, from: token.address, stable: false }],
-      owner.address,
-      BigNumber.from("999999999999999999")
-    );
+    await router.swapExactTokensForTokens(parseUnits("1000", 6), 0, [{ to: cash.address, from: usdt.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
 
-    await router.swapExactTokensForTokens(
-      parseUnits("1000", 6),
-      0,
-      [{ to: cash.address, from: token.address, stable: false }],
-      owner.address,
-      BigNumber.from("999999999999999999")
-    );
+    await router.swapExactTokensForTokens(parseUnits("1000", 6), 0, [{ to: cash.address, from: usdt.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
 
-    console.log("_supplied", await SatinCashPair.index0());
+    console.log("_supplied", await USDTCashPair.index0());
 
-    console.log("Fee balance", await token.balanceOf(bribeSatinCash.address));
+    console.log("Fee balance", await usdt.balanceOf(bribeUSDTCash.address));
     await ve.claimFees();
     console.log("ve address", ve.address);
-    console.log("Fee balance", await token.balanceOf(bribeSatinCash.address));
-    // console.log("Balance After", await token.balanceOf(bribeSatinCash.address));
+    console.log("Fee balance", await usdt.balanceOf(bribeUSDTCash.address));
+    // console.log("Balance After", await token.balanceOf(bribeUSDTCash.address));
   });
 
   xit("claim fee any user", async function () {
     const EXPECTED_FEE = "0.25";
-    await SatinCashPair.connect(owner).approve(gaugeSatinCash.address, amount1000At6);
-    await gaugeSatinCash.connect(owner).deposit(amount1000At6, 0);
-    const fees = await SatinCashPair.fees();
+    await USDTCashPair.connect(owner).approve(gaugeUSDTCash.address, amount1000At6);
+    await gaugeUSDTCash.connect(owner).deposit(amount1000At6, 0);
+    const fees = await USDTCashPair.fees();
 
     await cash.approve(router.address, parseUnits("99999"));
     await router.swapExactTokensForTokens(parseUnits("1000"), 0, [{ from: cash.address, to: token.address, stable: false }], owner.address, BigNumber.from("999999999999999999"));
@@ -216,60 +232,60 @@ describe("gauge and bribe tests", function () {
     console.log("Balance before", await cash.balanceOf(owner3.address));
     console.log("Balance before", await token.balanceOf(owner3.address));
 
-    // await SatinCashPair.approve(ve.address, ethers.BigNumber.from("2000000000000000000"));
+    // await USDTCashPair.approve(ve.address, ethers.BigNumber.from("2000000000000000000"));
     await ve.createLockFor(ethers.BigNumber.from("1000000000000000000"), WEEK, owner.address);
     await ve.connect(owner3).claimFees();
 
     console.log("Balance before", await cash.balanceOf(owner3.address));
     console.log("Balance After", await token.balanceOf(owner3.address));
 
-    // await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("5000")]);
-    // const tokenIDaddress = await bribeSatinCash.tokenIdToAddress(1);
+    // await voter.vote(1, [USDTCashPair.address], [ethers.BigNumber.from("5000")]);
+    // const tokenIDaddress = await bribeUSDTCash.tokenIdToAddress(1);
     // console.log("tokenIDaddress", tokenIDaddress);
-    // console.log("earned", await bribeSatinCash.earned(cash.address, tokenIDaddress));
+    // console.log("earned", await bribeUSDTCash.earned(cash.address, tokenIDaddress));
   });
 
   // it("gauge getReward for not owner or voter should be forbidden", async function () {
-  //   await expect(gaugeSatinCash.getReward(owner2.address, [])).revertedWith("Forbidden");
+  //   await expect(gaugeUSDTCash.getReward(owner2.address, [])).revertedWith("Forbidden");
   // });
 
   // it("bribe getReward for not owner should reject", async function () {
-  //   await expect(bribeSatinCash.getReward(0, [ZERO_ADDRESS])).revertedWith("Not token owner");
+  //   await expect(bribeUSDTCash.getReward(0, [ZERO_ADDRESS])).revertedWith("Not token owner");
   // });
 
   // it("bribe getRewardForOwner for not voter should reject", async function () {
-  //   await expect(bribeSatinCash.getRewardForOwner(0, [ZERO_ADDRESS])).revertedWith("Not voter");
+  //   await expect(bribeUSDTCash.getRewardForOwner(0, [ZERO_ADDRESS])).revertedWith("Not voter");
   // });
 
   // it("bribe deposit for not voter should reject", async function () {
-  //   await expect(bribeSatinCash._deposit(0, 0)).revertedWith("Not voter");
+  //   await expect(bribeUSDTCash._deposit(0, 0)).revertedWith("Not voter");
   // });
 
   // it("bribe withdraw for not voter should reject", async function () {
-  //   await expect(bribeSatinCash._withdraw(0, 0)).revertedWith("Not voter");
+  //   await expect(bribeUSDTCash._withdraw(0, 0)).revertedWith("Not voter");
   // });
 
   // it("bribe deposit with zero amount should reject", async function () {
   //   const voter = await impersonate(voter.address);
-  //   await expect(bribeSatinCash.connect(voter)._deposit(0, 0)).revertedWith("Zero amount");
+  //   await expect(bribeUSDTCash.connect(voter)._deposit(0, 0)).revertedWith("Zero amount");
   // });
 
   // it("bribe withdraw with zero amount should reject", async function () {
-  //   await expect(bribeSatinCash.connect(voter)._withdraw(0, 0)).revertedWith("Zero amount");
+  //   await expect(bribeUSDTCash.connect(voter)._withdraw(0, 0)).revertedWith("Zero amount");
   // });
 
   // it("bribe tokenIdToAddress should be rejected with too high tokenId", async function () {
-  //   await expect(bribeSatinCash.tokenIdToAddress(MAX_UINT)).revertedWith("Wrong convert");
+  //   await expect(bribeUSDTCash.tokenIdToAddress(MAX_UINT)).revertedWith("Wrong convert");
   // });
 
   // it("bribe tokenIdToAddress should be rejected with too high tokenId", async function () {
-  //   expect(await bribeSatinCash.addressToTokenId(await bribeSatinCash.tokenIdToAddress(1))).is.eq(
+  //   expect(await bribeUSDTCash.addressToTokenId(await bribeUSDTCash.tokenIdToAddress(1))).is.eq(
   //     1
   //   );
   // });
 
   // it("deposit with another tokenId should be rejected", async function () {
-  //   expect(await gaugeSatinCash.tokenIds(owner.address)).is.eq(1);
+  //   expect(await gaugeUSDTCash.tokenIds(owner.address)).is.eq(1);
   //   await TestHelper.addLiquidity(
   //     factory,
   //     router,
@@ -285,8 +301,8 @@ describe("gauge and bribe tests", function () {
   //   const pair = (await ethers.getContractFactory("BaseV1Pair")).connect(pairAdr, owner);
   //   const pairBalance = await pair.balanceOf(owner.address);
   //   expect(pairBalance).is.not.eq(0);
-  //   await pair.approve(gaugeSatinCash.address, pairBalance);
-  //   await expect(gaugeSatinCash.deposit(pairBalance, 3)).revertedWith("Wrong token");
+  //   await pair.approve(gaugeUSDTCash.address, pairBalance);
+  //   await expect(gaugeUSDTCash.deposit(pairBalance, 3)).revertedWith("Wrong token");
   // });
 });
 

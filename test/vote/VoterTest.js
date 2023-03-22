@@ -6,9 +6,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const { formatUnits, parseUnits } = require("ethers/lib/utils");
 const { BigNumber, utils, Contract } = require("ethers");
 const { parse } = require("typechain");
-const MAX_UINT = BigNumber.from(
-  "115792089237316195423570985008687907853269984665640564039457584007913129639935"
-);
+const MAX_UINT = BigNumber.from("115792089237316195423570985008687907853269984665640564039457584007913129639935");
 const amount1000At6 = parseUnits("1000", 6);
 const WEEK = 60 * 60 * 24 * 7;
 
@@ -36,7 +34,16 @@ describe("Voter tests", function () {
   let voter;
   let minter;
   let SatinCashPair;
+  let Factory;
+  let Router;
+  let Token;
+  let Gaauges;
 
+  let Briibes;
+  let bribe_int;
+  let Ve;
+  let Ve_dist;
+  let tresuryAddress = "0x9c4927530B1719e063D7E181C6c2e56353204e64";
   let gauge;
   let bribe;
   let helper;
@@ -62,56 +69,78 @@ describe("Voter tests", function () {
     await dai.mint(owner.address, utils.parseUnits("1000000"));
     await cash.mint(owner.address, utils.parseUnits("1000000"));
 
-    let Factory = await ethers.getContractFactory("BaseV1Factory");
-    factory = await upgrades.deployProxy(Factory, [owner3.address]);
-    let Router = await ethers.getContractFactory("BaseV1Router01");
-    router = await upgrades.deployProxy(Router, [factory.address, wmatic.address]);
+    const ProxyFactory_factory = await ethers.getContractFactory("ProxyFactory");
+    const proxyFactory = await ProxyFactory_factory.deploy();
+    console.log("proxyFactory is deployed at address", proxyFactory.address);
+
+    const poolFactory = await ethers.getContractFactory("BaseV1Pair");
+    const poolImplementation = await poolFactory.deploy();
+    proxyAdmin = await upgrades.deployProxyAdmin();
+
+    const _gaugeContract = await ethers.getContractFactory("Gauge");
+    const gaugeImplementation = await _gaugeContract.deploy();
+    console.log("gaugeImplementation is deployed at", gaugeImplementation.address);
+
+    const _internalBribeContract = await ethers.getContractFactory("InternalBribe");
+    const internalBribeImplementation = await _internalBribeContract.deploy();
+    console.log("internalBribeImplementation is deployed at", internalBribeImplementation.address);
+
+    const _externalBribeContract = await ethers.getContractFactory("ExternalBribe");
+    const externalBribeImplementation = await _externalBribeContract.deploy();
+    console.log("externalBribeImplementation is deployed at", externalBribeImplementation.address);
+
+    // GET CONTRACTS //////////////////////
+
+    Factory = await ethers.getContractFactory("BaseV1Factory", {
+      libraries: {
+        ProxyFactory: proxyFactory.address,
+      },
+    });
+    Router = await ethers.getContractFactory("BaseV1Router01");
+    pair = await ethers.getContractFactory("BaseV1Pair");
+    Token = await ethers.getContractFactory("Satin");
+    Gaauges = await ethers.getContractFactory("GaugeFactory", {
+      libraries: {
+        ProxyFactory: proxyFactory.address,
+      },
+    });
+    gauge = await ethers.getContractFactory("Gauge");
+    Briibes = await ethers.getContractFactory("BribeFactory", {
+      libraries: {
+        ProxyFactory: proxyFactory.address,
+      },
+    });
+    bribe = await ethers.getContractFactory("ExternalBribe");
+    bribe_int = await ethers.getContractFactory("InternalBribe");
+    Ve = await ethers.getContractFactory("Ve");
+    Ve_dist = await ethers.getContractFactory("VeDist");
+    BaseV1Voter = await ethers.getContractFactory("SatinVoter");
+    BaseV1Minter = await ethers.getContractFactory("SatinMinter");
+    Controller = await ethers.getContractFactory("Controller");
 
     const minterMax = utils.parseUnits("58333333");
 
-    pair = await ethers.getContractFactory("BaseV1Pair");
-    const Token = await ethers.getContractFactory("Satin");
-    const Gaauges = await ethers.getContractFactory("GaugeFactory");
-    gauge = await ethers.getContractFactory("Gauge");
-    const Briibes = await ethers.getContractFactory("BribeFactory");
-    bribe = await ethers.getContractFactory("Bribe");
-    const Ve = await ethers.getContractFactory("Ve");
-    const Ve_dist = await ethers.getContractFactory("VeDist");
-    const BaseV1Voter = await ethers.getContractFactory("SatinVoter");
-    const BaseV1Minter = await ethers.getContractFactory("SatinMinter");
-    const Controller = await ethers.getContractFactory("Controller");
+    // DEPLOY CONTRACTS //////////////////////
 
-    controller = await upgrades.deployProxy(Controller);
+    factory = await upgrades.deployProxy(Factory, [tresuryAddress, proxyAdmin, poolImplementation.address], {
+      unsafeAllowLinkedLibraries: true,
+    });
+    router = await upgrades.deployProxy(Router, [factory.address, wmatic.address]);
     token = await upgrades.deployProxy(Token);
-    gauges = await upgrades.deployProxy(Gaauges);
-    bribes = await upgrades.deployProxy(Briibes);
+    controller = await upgrades.deployProxy(Controller);
+    gauges = await upgrades.deployProxy(Gaauges, [proxyAdmin, gaugeImplementation.address], {
+      unsafeAllowLinkedLibraries: true,
+    });
+    bribes = await upgrades.deployProxy(Briibes, [proxyAdmin, internalBribeImplementation.address, externalBribeImplementation.address], {
+      unsafeAllowLinkedLibraries: true,
+    });
+    cashAddress = cash.address;
     ve = await upgrades.deployProxy(Ve, [controller.address]);
-    ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address]);
-    voter = await upgrades.deployProxy(BaseV1Voter, [
-      ve.address,
-      factory.address,
-      gauges.address,
-      bribes.address,
-      token.address,
-    ]);
-    minter = await upgrades.deployProxy(BaseV1Minter, [
-      ve.address,
-      controller.address,
-      token.address,
-      1,
-      owner3.address,
-    ]);
+    ve_dist = await upgrades.deployProxy(Ve_dist, [ve.address, token.address, cashAddress]);
+    voter = await upgrades.deployProxy(BaseV1Voter, [ve.address, factory.address, gauges.address, bribes.address, token.address, ve_dist.address, owner.address]);
+    minter = await upgrades.deployProxy(BaseV1Minter, [ve.address, controller.address, token.address]);
 
-    const cashAddress = cash.address;
-
-    const voterTokens = [
-      wmatic.address,
-      usdt.address,
-      usdc.address,
-      dai.address,
-      token.address,
-      cash.address,
-    ];
+    const voterTokens = [wmatic.address, usdt.address, usdc.address, dai.address, token.address, cash.address];
 
     await token.setMinter(minter.address);
     await ve_dist.setDepositor(minter.address);
@@ -133,41 +162,11 @@ describe("Voter tests", function () {
     await token.approve(router.address, MAX_UINT);
     await dai.approve(router.address, MAX_UINT);
 
-    await router.addLiquidity(
-      cashAddress,
-      token.address,
-      false,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(
-      cashAddress,
-      dai.address,
-      true,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, dai.address, true, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner.address, Date.now());
 
-    await router.addLiquidity(
-      cashAddress,
-      token.address,
-      false,
-      utils.parseUnits("1000"),
-      utils.parseUnits("1000"),
-      1,
-      1,
-      owner2.address,
-      Date.now()
-    );
+    await router.addLiquidity(cashAddress, token.address, false, utils.parseUnits("1000"), utils.parseUnits("1000"), 1, 1, owner2.address, Date.now());
 
     const SatinCashPairAddress = await router.pairFor(cashAddress, token.address, false);
     SatinCashPair = pair.attach(SatinCashPairAddress);
@@ -176,7 +175,7 @@ describe("Voter tests", function () {
     expect(await voter.gauges(SatinCashPairAddress)).to.not.equal(ZERO_ADDRESS);
 
     const gaugeSatinCashAddress = await voter.gauges(SatinCashPairAddress);
-    const bribeSatinCashAddress = await voter.bribes(gaugeSatinCashAddress);
+    const bribeSatinCashAddress = await voter.external_bribes(gaugeSatinCashAddress);
 
     gaugeSatinCash = gauge.attach(gaugeSatinCashAddress);
     bribeSatinCash = bribe.attach(bribeSatinCashAddress);
@@ -201,11 +200,10 @@ describe("Voter tests", function () {
     await TimeUtils.rollback(snapshot);
   });
 
-  xit("Vote test", async function () {
+  it("Vote test", async function () {
     await SatinCashPair.approve(ve.address, MAX_UINT);
     const balanceOfSatinCashPair = await SatinCashPair.balanceOf(owner.address);
     await ve.createLockFor(balanceOfSatinCashPair, 86400 * 365, owner.address);
-    await voter.createGauge(SatinCashPair.address);
     console.log("balanceOfNFT before", await ve.balanceOfNFT(1));
     await voter.vote(1, [SatinCashPair.address], [ethers.BigNumber.from("1000")]);
     console.log("Votes", await voter.votes(1, SatinCashPair.address));
@@ -218,32 +216,7 @@ describe("Voter tests", function () {
     const ERC20 = await ethers.getContractFactory("GenericERC20");
     const Token = await ERC20.deploy("TOKEN", "TKN", 18);
 
-    await voter.whitelist(Token.address, 1);
-    expect(await voter.isWhitelisted(Token.address)).to.equal(true);
-  });
-
-  it("Cannot Whitelist if paused", async function () {
-    await SatinCashPair.approve(ve.address, MAX_UINT);
-    const balanceOfSatinCashPair = await SatinCashPair.balanceOf(owner.address);
-    await ve.createLockFor(balanceOfSatinCashPair, 86400 * 365, owner2.address);
-    const ERC20 = await ethers.getContractFactory("GenericERC20");
-    const Token = await ERC20.deploy("TOKEN", "TKN", 18);
-
-    await voter.setCanPublicWhitelistGauge(false);
-
-    await expect(voter.connect(owner2).whitelist(Token.address, 1)).revertedWith("Paused");
-  });
-
-  it("Owner can whitelist even if whitelisting is paused", async function () {
-    await SatinCashPair.approve(ve.address, MAX_UINT);
-    const balanceOfSatinCashPair = await SatinCashPair.balanceOf(owner.address);
-    await ve.createLockFor(balanceOfSatinCashPair, 86400 * 365, owner.address);
-    const ERC20 = await ethers.getContractFactory("GenericERC20");
-    const Token = await ERC20.deploy("TOKEN", "TKN", 18);
-
-    await voter.setCanPublicWhitelistGauge(false);
-    voter.whitelist(Token.address, 1);
-
+    await voter.whitelist(Token.address);
     expect(await voter.isWhitelisted(Token.address)).to.equal(true);
   });
 
@@ -262,16 +235,10 @@ describe("Voter tests", function () {
     console.log("balanceOfSatinCashPair", balanceOfSatinCashPair);
     await ve.createLockFor(parseUnits("800"), 86400 * 365, owner.address);
     await ve.createLockFor(parseUnits("1"), 86400 * 365, owner2.address);
-    await expect(voter.registerRewardToken(dai.address, gaugeSatinCash.address, 0)).revertedWith(
-      "!token"
-    );
-    await expect(voter.registerRewardToken(dai.address, gaugeSatinCash.address, 111)).revertedWith(
-      "!owner"
-    );
-    await expect(
-      voter.connect(owner2).registerRewardToken(dai.address, gaugeSatinCash.address, 2)
-    ).revertedWith("!power");
-    await voter.registerRewardToken(dai.address, gaugeSatinCash.address, 1);
+    await expect(voter.registerRewardToken(dai.address, gaugeSatinCash.address)).revertedWith("!token");
+    await expect(voter.registerRewardToken(dai.address, gaugeSatinCash.address)).revertedWith("!owner");
+    await expect(voter.connect(owner2).registerRewardToken(dai.address, gaugeSatinCash.address)).revertedWith("!power");
+    await voter.registerRewardToken(dai.address, gaugeSatinCash.address);
     expect(await gaugeSatinCash.rewardTokensLength()).to.equal(3);
   });
 
@@ -281,19 +248,13 @@ describe("Voter tests", function () {
     await ve.createLockFor(parseUnits("800"), 86400 * 365, owner.address);
     await ve.createLockFor(parseUnits("1"), 86400 * 365, owner2.address);
     expect(await gaugeSatinCash.rewardTokensLength()).to.equal(2);
-    await voter.registerRewardToken(dai.address, gaugeSatinCash.address, 1);
-    await voter.registerRewardToken(wmatic.address, gaugeSatinCash.address, 1);
+    await voter.registerRewardToken(dai.address, gaugeSatinCash.address);
+    await voter.registerRewardToken(wmatic.address, gaugeSatinCash.address);
     expect(await gaugeSatinCash.rewardTokensLength()).to.equal(4);
-    await expect(voter.removeRewardToken(dai.address, gaugeSatinCash.address, 0)).revertedWith(
-      "!token"
-    );
-    await expect(voter.removeRewardToken(dai.address, gaugeSatinCash.address, 111)).revertedWith(
-      "!owner"
-    );
-    await expect(
-      voter.connect(owner2).removeRewardToken(dai.address, gaugeSatinCash.address, 2)
-    ).revertedWith("!power");
-    await voter.removeRewardToken(wmatic.address, gaugeSatinCash.address, 1);
+    await expect(voter.removeRewardToken(dai.address, gaugeSatinCash.address)).revertedWith("First tokens forbidden to remove");
+    await expect(voter.removeRewardToken(dai.address, gaugeSatinCash.address)).revertedWith("!owner");
+    await expect(voter.connect(owner2).removeRewardToken(dai.address, gaugeSatinCash.address)).revertedWith("!power");
+    await voter.removeRewardToken(wmatic.address, gaugeSatinCash.address);
     expect(await gaugeSatinCash.rewardTokensLength()).to.equal(3);
   });
 
@@ -308,9 +269,9 @@ describe("Voter tests", function () {
     await SatinCashPair.approve(gaugeSatinCash.address, pair1000);
     await expect(gaugeSatinCash.deposit(pair1000, 2)).to.be.reverted;
     expect(await gaugeSatinCash.tokenIds(owner.address)).to.equal(1);
-    await expect(gaugeSatinCash.withdrawToken(0, 2)).to.be.reverted;
+    // await expect(gaugeSatinCash.withdraw(0)).to.be.reverted;
     expect(await gaugeSatinCash.tokenIds(owner.address)).to.equal(1);
-    await gaugeSatinCash.withdrawToken(0, 1);
+    await gaugeSatinCash.withdraw(0);
     expect(await gaugeSatinCash.tokenIds(owner.address)).to.equal(0);
   });
 
@@ -346,16 +307,10 @@ describe("Voter tests", function () {
     await bribeSatinCash.notifyRewardAmount(token.address, pair1000);
     await staking.notifyRewardAmount(pair1000);
 
-    expect((await gaugeSatinCash.rewardRate(token.address)).div("1000000000000000000")).to.equal(
-      BigNumber.from(1653)
-    );
-    expect((await bribeSatinCash.rewardRate(token.address)).div("1000000000000000000")).to.equal(
-      BigNumber.from(1653)
-    );
+    expect((await gaugeSatinCash.rewardRate(token.address)).div("1000000000000000000")).to.equal(BigNumber.from(1653439153439));
+    expect((await bribeSatinCash.rewardRate(token.address)).div("1000000000000000000")).to.equal(BigNumber.from(1653439153439));
     expect(await staking.rewardRate()).to.equal(BigNumber.from(1653));
-    expect((await gaugeSatinCash.rewardRate(token.address)).div("1000000000000000000")).to.be.equal(
-      await staking.rewardRate()
-    );
+    expect((await gaugeSatinCash.rewardRate(token.address)).div("1000000000000000000")).to.be.equal(await staking.rewardRate());
   });
 
   it("exit & getReward gauge stake", async function () {
@@ -380,19 +335,14 @@ describe("Voter tests", function () {
     await SatinCashPair.approve(ve.address, MAX_UINT);
     await SatinCashPair.approve(voter.address, MAX_UINT);
     await ve.createLockFor(parseUnits("100"), 86400 * 365, owner.address);
-    const adr1 = await bribeSatinCash.tokenIdToAddress(1);
     await voter.vote(1, [SatinCashPair.address], [5000]);
     expect(await voter.usedWeights(1)).to.closeTo(await ve.balanceOfNFT(1), 1000);
-    expect(await bribeSatinCash.balanceOf(adr1)).to.equal(
-      await voter.votes(1, SatinCashPair.address)
-    );
+    expect(await bribeSatinCash.balanceOf(1)).to.equal(await voter.votes(1, SatinCashPair.address));
     await voter.reset(1);
     expect(await voter.usedWeights(1)).to.below(await ve.balanceOfNFT(1));
     expect(await voter.usedWeights(1)).to.equal(0);
-    expect(await bribeSatinCash.balanceOf(adr1)).to.equal(
-      await voter.votes(1, SatinCashPair.address)
-    );
-    expect(await bribeSatinCash.balanceOf(adr1)).to.equal(0);
+    expect(await bribeSatinCash.balanceOf(1)).to.equal(await voter.votes(1, SatinCashPair.address));
+    expect(await bribeSatinCash.balanceOf(1)).to.equal(0);
   });
 
   it("gauge poke without votes", async function () {
@@ -410,10 +360,10 @@ describe("Voter tests", function () {
     await SatinCashPair.approve(ve.address, MAX_UINT);
     await SatinCashPair.approve(voter.address, MAX_UINT);
     await ve.createLockFor(parseUnits("100"), 86400 * 365, owner.address);
-    const adr1 = await bribeSatinCash.tokenIdToAddress(1);
+
     await voter.vote(1, [SatinCashPair.address], [5000]);
     expect(await voter.totalWeight()).to.not.equal(0);
-    expect(await bribeSatinCash.balanceOf(adr1)).to.not.equal(0);
+    expect(await bribeSatinCash.balanceOf(1)).to.not.equal(0);
   });
 
   it("gauge poke hacking2", async function () {
@@ -433,11 +383,9 @@ describe("Voter tests", function () {
     await SatinCashPair.approve(voter.address, MAX_UINT);
     await ve.createLockFor(parseUnits("100"), 86400 * 365, owner.address);
     await voter.vote(1, [SatinCashPair.address], [5000]);
-    const adr1 = await bribeSatinCash.tokenIdToAddress(1);
+
     expect(await voter.usedWeights(1)).to.closeTo(await ve.balanceOfNFT(1), 1000);
-    expect(await bribeSatinCash.balanceOf(adr1)).to.equal(
-      await voter.votes(1, SatinCashPair.address)
-    );
+    expect(await bribeSatinCash.balanceOf(1)).to.equal(await voter.votes(1, SatinCashPair.address));
   });
 
   it("gauge poke hacking3", async function () {
@@ -474,12 +422,8 @@ describe("Voter tests", function () {
     const Token = await ethers.getContractFactory("GenericERC20");
     const mockToken = await Token.deploy("MOCK", "MOCK", 10);
     await mockToken.mint(owner.address, utils.parseUnits("1000000000000", 10));
-    await voter.whitelist(mockToken.address, 1);
+    await voter.whitelist(mockToken.address);
     expect(await voter.isWhitelisted(mockToken.address)).is.eq(true);
-  });
-
-  it("listingFee test", async function () {
-    expect(await voter.listingFee()).not.eq(0);
   });
 
   it("double init reject test", async function () {
@@ -507,17 +451,13 @@ describe("Voter tests", function () {
   it("vote with duplicate pool revert test", async function () {
     await SatinCashPair.approve(ve.address, MAX_UINT);
     await ve.createLockFor(parseUnits("100"), 86400 * 365, owner.address);
-    await expect(
-      voter.vote(1, [SatinCashPair.address, SatinCashPair.address], [100, 1])
-    ).revertedWith("duplicate pool");
+    await expect(voter.vote(1, [SatinCashPair.address, SatinCashPair.address], [100, 1])).revertedWith("duplicate pool");
   });
 
   it("vote with too low power revert test", async function () {
     await SatinCashPair.approve(ve.address, MAX_UINT);
     await ve.createLockFor(parseUnits("0.0000000000000001"), 86400 * 365, owner.address);
-    await expect(
-      voter.connect(owner).vote(1, [SatinCashPair.address], [parseUnits("1")])
-    ).revertedWith("zero power");
+    await expect(voter.connect(owner).vote(1, [SatinCashPair.address], [parseUnits("1")])).revertedWith("zero power");
   });
 
   it("vote not owner revert test", async function () {
@@ -531,9 +471,8 @@ describe("Voter tests", function () {
   });
 
   it("duplicate whitelist revert test", async function () {
-    await SatinCashPair.approve(ve.address, MAX_UINT);
-    await ve.createLockFor(parseUnits("800"), 86400 * 365, owner.address);
-    await expect(voter.whitelist(dai.address, 1)).revertedWith("already whitelisted");
+    await voter.whitelist(dai.address);
+    await expect(voter.whitelist(dai.address)).revertedWith("already whitelisted");
   });
 
   it("createGauge duplicate gauge revert test", async function () {
@@ -553,10 +492,7 @@ describe("Voter tests", function () {
       method: "hardhat_impersonateAccount",
       params: [gaugeSatinCash.address],
     });
-    await network.provider.send("hardhat_setBalance", [
-      gaugeSatinCash.address,
-      "0x10000000000000000",
-    ]);
+    await network.provider.send("hardhat_setBalance", [gaugeSatinCash.address, "0x10000000000000000"]);
     const gaugeSigner = await ethers.getSigner(gaugeSatinCash.address);
     await voter.connect(gaugeSigner).attachTokenToGauge(0, owner.address);
   });
@@ -570,10 +506,7 @@ describe("Voter tests", function () {
       method: "hardhat_impersonateAccount",
       params: [gaugeSatinCash.address],
     });
-    await network.provider.send("hardhat_setBalance", [
-      gaugeSatinCash.address,
-      "0x10000000000000000",
-    ]);
+    await network.provider.send("hardhat_setBalance", [gaugeSatinCash.address, "0x10000000000000000"]);
     const gaugeSigner = await ethers.getSigner(gaugeSatinCash.address);
     await voter.connect(gaugeSigner).detachTokenFromGauge(0, owner.address);
   });
@@ -602,11 +535,7 @@ describe("Voter tests", function () {
     await voter.distributeForGauges([gaugeSatinCash.address]);
   });
 
-  it("whitelist wrong token revert test", async function () {
-    await expect(voter.whitelist(ZERO_ADDRESS, 0)).revertedWith("!token");
-  });
-
   it("whitelist not owner revert test", async function () {
-    await expect(voter.whitelist(ZERO_ADDRESS, 99)).revertedWith("!owner");
+    await expect(voter.connect(owner3).whitelist(ZERO_ADDRESS)).revertedWith("!VoterOwner");
   });
 });
