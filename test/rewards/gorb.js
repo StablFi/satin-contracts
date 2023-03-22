@@ -9,7 +9,8 @@ const MAX_UINT = BigNumber.from("11579208923731619542357098500868790785326998466
 const amount1000At6 = parseUnits("1000", 6);
 const WEEK = 60 * 60 * 24 * 7;
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
-var hdate = require("human-date");
+const timestamp = require("unix-timestamp");
+
 describe("gauge and bribe tests", function () {
   let snapshotBefore;
   let snapshot;
@@ -233,13 +234,15 @@ describe("gauge and bribe tests", function () {
     console.log(await minter.activePeriod(), await voter.lastVoted(1), "vote 0");
 
     const block = await ethers.provider.getBlock("latest");
-    console.log(hdate.prettyPrint((await ethers.provider.getBlock("latest")).timestamp), "week0");
+    const Date = timestamp.toDate((await ethers.provider.getBlock("latest")).timestamp);
+    console.log(Date, "week0");
 
     await time.increaseTo(block.timestamp + 794800);
-    console.log(hdate.prettyPrint((await ethers.provider.getBlock("latest")).timestamp), await ethers.provider.getBlock("latest").timestamp, "week1");
+    const Date2 = timestamp.toDate((await ethers.provider.getBlock("latest")).timestamp);
+    console.log(Date2, "week1");
 
-    const a = await minter.updatePeriod();
-    console.log(a, await minter.activePeriod(), await voter.lastVoted(1), "vote after week");
+    await minter.updatePeriod();
+    console.log(await minter.activePeriod(), await voter.lastVoted(1), "vote after week");
 
     await voter.reset(1);
     console.log("hell1");
