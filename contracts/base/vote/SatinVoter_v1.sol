@@ -18,7 +18,7 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
+contract SatinVoterV1 is IVoter, Initializable, ReentrancyGuardUpgradeable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /// @dev The ve token that governs these contracts
@@ -168,17 +168,17 @@ contract SatinVoter is IVoter, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /// @dev Resubmit exist votes for given token. For internal purposes.
-    // function poke(uint _tokenId) external {
-    //     address[] memory _poolVote = poolVote[_tokenId];
-    //     uint _poolCnt = _poolVote.length;
-    //     int256[] memory _weights = new int256[](_poolCnt);
+    function poke(uint _tokenId) external {
+        address[] memory _poolVote = poolVote[_tokenId];
+        uint _poolCnt = _poolVote.length;
+        int256[] memory _weights = new int256[](_poolCnt);
 
-    //     for (uint i = 0; i < _poolCnt; i++) {
-    //         _weights[i] = votes[_tokenId][_poolVote[i]];
-    //     }
+        for (uint i = 0; i < _poolCnt; i++) {
+            _weights[i] = votes[_tokenId][_poolVote[i]];
+        }
 
-    //     _vote(_tokenId, _poolVote, _weights);
-    // }
+        _vote(_tokenId, _poolVote, _weights);
+    }
 
     function _vote(uint _tokenId, address[] memory _poolVote, int256[] memory _weights) internal {
         _reset(_tokenId);

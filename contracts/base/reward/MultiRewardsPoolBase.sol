@@ -221,22 +221,18 @@ abstract contract MultiRewardsPoolBase is Initializable, ReentrancyGuardUpgradea
 
     // earned is an estimation, it won't be exact till the supply > rewardPerToken calculations have run
     function _earned(address token, address account) internal view returns (uint) {
-        // zero checkpoints means zero deposits
+        uint _startTimestamp = Math.max(lastEarn[token][account], rewardPerTokenCheckpoints[token][0].timestamp);
         if (numCheckpoints[account] == 0) {
             return 0;
         }
-        // last claim rewards time
-        uint _startTimestamp = Math.max(lastEarn[token][account], rewardPerTokenCheckpoints[token][0].timestamp);
 
-        // find an index of the balance that the user had on the last claim
         uint _startIndex = _getPriorBalanceIndex(account, _startTimestamp);
         uint _endIndex = numCheckpoints[account] - 1;
 
         uint reward = 0;
 
-        // calculate previous snapshots if exist
-        if (_endIndex > 0) {
-            for (uint i = _startIndex; i <= _endIndex - 1; i++) {
+        if (_endIndex - _startIndex > 0) {
+            for (uint i = _startIndex; i < _endIndex; i++) {
                 CheckpointLib.Checkpoint memory cp0 = checkpoints[account][i];
                 CheckpointLib.Checkpoint memory cp1 = checkpoints[account][i + 1];
                 (uint _rewardPerTokenStored0, ) = _getPriorRewardPerToken(token, cp0.timestamp);
@@ -248,6 +244,7 @@ abstract contract MultiRewardsPoolBase is Initializable, ReentrancyGuardUpgradea
         CheckpointLib.Checkpoint memory cp = checkpoints[account][_endIndex];
         (uint _rewardPerTokenStored, ) = _getPriorRewardPerToken(token, cp.timestamp);
         reward += (cp.value * (_rewardPerToken(token) - Math.max(_rewardPerTokenStored, userRewardPerTokenStored[token][account]))) / PRECISION;
+
         return reward;
     }
 

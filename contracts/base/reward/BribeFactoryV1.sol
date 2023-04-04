@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "hardhat/console.sol";
 
-contract BribeFactory_Upgrade is Initializable, IBribeFactory {
+contract BribeFactoryV1 is Initializable, IBribeFactory {
     address public last_internal_bribe;
     address public last_external_bribe;
 
@@ -38,7 +38,8 @@ contract BribeFactory_Upgrade is Initializable, IBribeFactory {
         return last_external_bribe;
     }
 
-    function newFunction() external pure returns (uint32) {
-        return 1234;
+    function initializeImplementation(address _internalBribeImplementationAddress, address _externalBribeImplementationAddress) public reinitializer(2) {
+        internalBribeImplementationAddress = _internalBribeImplementationAddress;
+        externalBribeImplementationAddress = _externalBribeImplementationAddress;
     }
 }

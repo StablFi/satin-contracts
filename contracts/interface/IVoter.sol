@@ -29,5 +29,7 @@ interface IVoter {
 
     function viewSatinCashLPGaugeAddress() external view returns (address);
 
+    function xbribePaused() external view returns (bool);
+
     function distributeAll() external;
 }

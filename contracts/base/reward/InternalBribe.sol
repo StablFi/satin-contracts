@@ -261,6 +261,8 @@ contract InternalBribe is Initializable, IInternalBribe {
 
             emit ClaimRewards(msg.sender, tokens[i], _reward);
         }
+        _writeCheckpoint(tokenId, balanceOf[tokenId]);
+        _writeSupplyCheckpoint();
     }
 
     // used by Voter to allow batched reward claims
@@ -277,6 +279,8 @@ contract InternalBribe is Initializable, IInternalBribe {
 
             emit ClaimRewards(_owner, tokens[i], _reward);
         }
+        _writeCheckpoint(tokenId, balanceOf[tokenId]);
+        _writeSupplyCheckpoint();
     }
 
     function rewardPerToken(address token) public view returns (uint) {
@@ -395,8 +399,8 @@ contract InternalBribe is Initializable, IInternalBribe {
 
         uint reward = 0;
 
-        if (_endIndex > 0) {
-            for (uint i = _startIndex; i <= _endIndex - 1; i++) {
+        if (_endIndex - _startIndex > 0) {
+            for (uint i = _startIndex; i <= _endIndex; i++) {
                 Checkpoint memory cp0 = checkpoints[tokenId][i];
                 Checkpoint memory cp1 = checkpoints[tokenId][i + 1];
                 (uint _rewardPerTokenStored0, ) = getPriorRewardPerToken(token, cp0.timestamp);

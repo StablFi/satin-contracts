@@ -17,4 +17,6 @@ yarn.lock
 
 # OZ deploy files
 .openzeppelin
+
+.openzeppelin\.session
 .sync-gits-env

@@ -14,7 +14,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /// @title Codifies the minting rules as per ve(3,3),
 ///        abstracted from the token to support any token that allows minting
-contract SatinMinter is IMinter, Initializable {
+contract SatinMinterV1 is IMinter, Initializable {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /// @dev Allows minting once per week (reset every Thursday 00:00 UTC)
@@ -138,5 +138,10 @@ contract SatinMinter is IMinter, Initializable {
             emit Mint(msg.sender, _weekly, _growth);
         }
         return _period;
+    }
+
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "Caller not owner");
+        owner = newOwner;
     }
 }

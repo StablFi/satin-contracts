@@ -71,6 +71,7 @@ module.exports = {
         auto: true,
         interval: 2000,
       },
+      chainId: 137,
     },
     //     rinkeby: {
     //       url: RINKEBY_RPC_URL,
@@ -86,7 +87,7 @@ module.exports = {
       url: process.env.RPC,
       chainId: 137,
       accounts: [PRIVATE_KEY],
-      gasPrice: 300e9, // in wei
+      gasPrice: 450e9, // in wei
       gasMultiplier: 1.2,
     },
     mumbai: {
@@ -98,6 +99,12 @@ module.exports = {
       url: "https://rpc.tenderly.co/fork/10703085-2bad-4f77-b0c8-a4a41f8bada6",
       chainId: 137,
       accounts: [PRIVATE_KEY],
+    },
+    fork: {
+      url: "http://127.0.0.1:8545/",
+      accounts: [PRIVATE_KEY],
+      chainId: 137,
+      gasPrice: 4000e9,
     },
     stabl: {
       url: "https://internal-rpc.stabl.fi",
@@ -116,6 +123,6 @@ module.exports = {
     sources: "./contracts",
   },
   gasReporter: {
-    enabled: true,
+    enabled: false,
   },
 };

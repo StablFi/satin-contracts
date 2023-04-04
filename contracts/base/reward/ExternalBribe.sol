@@ -207,6 +207,8 @@ contract ExternalBribe is Initializable, IBribe {
 
             emit ClaimRewards(msg.sender, tokens[i], _reward);
         }
+        _writeCheckpoint(tokenId, balanceOf[tokenId]);
+        _writeSupplyCheckpoint();
     }
 
     // used by Voter to allow batched reward claims
@@ -220,6 +222,8 @@ contract ExternalBribe is Initializable, IBribe {
 
             emit ClaimRewards(_owner, tokens[i], _reward);
         }
+        _writeCheckpoint(tokenId, balanceOf[tokenId]);
+        _writeSupplyCheckpoint();
     }
 
     function earned(address token, uint tokenId) public view returns (uint) {
@@ -292,6 +296,7 @@ contract ExternalBribe is Initializable, IBribe {
 
     function notifyRewardAmount(address token, uint amount) external lock {
         require(amount > 0);
+        require(!(IVoter(voter).xbribePaused()), "Paused");
         if (!isReward[token]) {
             require(IVoter(voter).isWhitelisted(token), "bribe tokens must be whitelisted");
             require(rewards.length < MAX_REWARD_TOKENS, "too many rewards tokens");

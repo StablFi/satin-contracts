@@ -91,6 +91,7 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
     }
 
     function deposit(uint amount, uint tokenId) public {
+        require(amount > 0, "!ZERO");
         if (tokenId > 0) {
             _lockVeToken(msg.sender, tokenId);
         }
@@ -103,6 +104,7 @@ contract Gauge is IGauge, ReentrancyGuardUpgradeable, MultiRewardsPoolBase {
     }
 
     function withdraw(uint amount) public {
+        require(amount > 0, "!ZERO");
         uint tokenId = 0;
         if (amount == balanceOf[msg.sender]) {
             tokenId = tokenIds[msg.sender];
