@@ -362,7 +362,7 @@ contract InternalBribe is Initializable, IInternalBribe {
         uint _startIndex = getPriorSupplyIndex(_startTimestamp);
         uint _endIndex = Math.min(supplyNumCheckpoints - 1, maxRuns);
 
-        if (_endIndex > 0) {
+        if (_endIndex - _startIndex > 0) {
             for (uint i = _startIndex; i <= _endIndex - 1; i++) {
                 SupplyCheckpoint memory sp0 = supplyCheckpoints[i];
                 if (sp0.supply > 0) {
@@ -400,7 +400,7 @@ contract InternalBribe is Initializable, IInternalBribe {
         uint reward = 0;
 
         if (_endIndex - _startIndex > 0) {
-            for (uint i = _startIndex; i <= _endIndex; i++) {
+            for (uint i = _startIndex; i < _endIndex; i++) {
                 Checkpoint memory cp0 = checkpoints[tokenId][i];
                 Checkpoint memory cp1 = checkpoints[tokenId][i + 1];
                 (uint _rewardPerTokenStored0, ) = getPriorRewardPerToken(token, cp0.timestamp);

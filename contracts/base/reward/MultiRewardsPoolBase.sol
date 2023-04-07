@@ -282,7 +282,7 @@ abstract contract MultiRewardsPoolBase is Initializable, ReentrancyGuardUpgradea
         uint _startIndex = _getPriorSupplyIndex(_startTimestamp);
         uint _endIndex = Math.min(supplyNumCheckpoints - 1, maxRuns);
 
-        if (_endIndex > 0) {
+        if (_endIndex - _startIndex > 0) {
             for (uint i = _startIndex; i <= _endIndex - 1; i++) {
                 CheckpointLib.Checkpoint memory sp0 = supplyCheckpoints[i];
                 if (sp0.value > 0) {
